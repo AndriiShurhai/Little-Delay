@@ -1,10 +1,13 @@
 using System;
 using Unity.Cinemachine;
+using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
+    public static PlayerController Instance { get; private set; }
+
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private float jumpForce = 5f;
@@ -18,7 +21,45 @@ public class PlayerController : MonoBehaviour
 
 
     private Rigidbody rb;
+    private IInputSource inputSource;
     private bool isGrounded;
+
+    private Vector3 startPosition;
+    private Vector3 startRotation;
+
+    private bool isPlaybackActive = false;
+
+    private Vector3 cachedForward;
+    private Vector3 cachedRight;
+
+    private bool pendingJump = false;
+
+    public bool IsPlayingBack => isPlaybackActive;
+
+    public Vector3 StartPosition => startPosition;
+    public Vector3 StartRotation => startRotation;
+
+    public IInputSource InputSource => inputSource;
+    public Vector3 CurrentMoveDirection { get; private set; }
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
+
+    public void SetInputSource(IInputSource source)
+    {
+        if (inputSource != null)
+            inputSource.OnJumpPressed -= GameInput_OnJumpAction;
+
+        isPlaybackActive = source is InputPlayback;
+        inputSource = source;
+        inputSource.OnJumpPressed += GameInput_OnJumpAction;
+    }
 
     private void Start()
     {
@@ -26,30 +67,52 @@ public class PlayerController : MonoBehaviour
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate; 
 
-        GameInput.Instance.OnJumpAction += GameInput_OnJumpAction;
+        startPosition = transform.position;
+        startRotation = transform.eulerAngles;
     }
 
     private void Update()
     {
-        isGrounded = Physics.Raycast(transform.position, Vector3.down, (playerHeight * 0.5f) + 0.2f, groundLayer);
+        cachedForward = cameraTarget.forward;
+        cachedForward.y = 0f;
+        cachedForward.Normalize();
+
+        cachedRight = cameraTarget.right;
+        cachedRight.y = 0f;
+        cachedRight.Normalize();
     }
 
     private void FixedUpdate()
     {
+        isGrounded = Physics.Raycast(transform.position, Vector3.down, (playerHeight * 0.5f) + 0.2f, groundLayer);
+
+        if (pendingJump)
+        {
+            if (isGrounded)
+            {
+                rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+            }
+            pendingJump = false; 
+        }
+
         HandleMovement();
     }
-    private void HandleMovement()
+    public void HandleMovement()
     {
-        Vector2 inputVector = GameInput.Instance.GetMovementVectorNormalized();
+        Vector3 moveDirection;
 
-        Vector3 forward = cameraTarget.forward;
-        Vector3 right = cameraTarget.right;
-        forward.y = 0f;
-        right.y = 0f;
-        forward.Normalize();
-        right.Normalize();
+        if (isPlaybackActive)
+        {
+            moveDirection = inputSource.GetWorldMoveDirection();
+        }
+        else
+        {
+            Vector2 inputVector = inputSource.GetMoveDirection();
+            moveDirection = (cachedForward * inputVector.y) + (cachedRight * inputVector.x);
+        }
 
-        Vector3 moveDirection = (forward * inputVector.y) + (right * inputVector.x);
+        CurrentMoveDirection = moveDirection;
 
         rb.linearVelocity = new Vector3(
             moveDirection.x * moveSpeed,
@@ -60,25 +123,20 @@ public class PlayerController : MonoBehaviour
         if (moveDirection != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, 10f * Time.fixedDeltaTime);
+            rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRotation, 10f * Time.fixedDeltaTime));
         }
     }
 
-    private void GameInput_OnJumpAction(object sender, EventArgs e)
+    private void GameInput_OnJumpAction()
     {
-        if (isGrounded)
-        {
-            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-        }
+        pendingJump = true;
     }
 
     private void OnDestroy()
     {
-        if (GameInput.Instance != null)
+        if (inputSource != null)
         {
-            GameInput.Instance.OnJumpAction -= GameInput_OnJumpAction;
+            inputSource.OnJumpPressed -= GameInput_OnJumpAction;
         }
     }
 }

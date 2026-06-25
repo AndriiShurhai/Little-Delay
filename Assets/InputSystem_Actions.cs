@@ -123,7 +123,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""name"": ""Interact"",
                     ""type"": ""Button"",
                     ""id"": ""852140f2-7766-474d-8707-702459ba45f3"",
-                    ""expectedControlType"": ""Button"",
+                    ""expectedControlType"": """",
                     ""processors"": """",
                     ""interactions"": ""Hold"",
                     ""initialStateCheck"": false
@@ -169,6 +169,33 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""type"": ""Button"",
                     ""id"": ""641cd816-40e6-41b4-8c3d-04687c349290"",
                     ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RecordStart"",
+                    ""type"": ""Button"",
+                    ""id"": ""21aa2b76-ef66-4146-8121-5a2a19b38bd5"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""RecordFinish"",
+                    ""type"": ""Button"",
+                    ""id"": ""3e2932c2-37b3-4c5b-a030-82fd3984b6ef"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PlaybackStop"",
+                    ""type"": ""Button"",
+                    ""id"": ""541b8754-88f1-4e88-bec6-fde5fbd11822"",
+                    ""expectedControlType"": """",
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
@@ -557,6 +584,39 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
                     ""action"": ""Crouch"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""f90e9b62-1322-46dc-96a6-1b882a334737"",
+                    ""path"": ""<Keyboard>/q"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RecordStart"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""a5390a2e-9db6-4a10-9834-b61cad81902c"",
+                    ""path"": ""<Keyboard>/e"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""RecordFinish"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""ceb03701-8065-419c-9dfa-20d43b432fc7"",
+                    ""path"": ""<Keyboard>/p"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PlaybackStop"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1153,6 +1213,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_Previous = m_Player.FindAction("Previous", throwIfNotFound: true);
         m_Player_Next = m_Player.FindAction("Next", throwIfNotFound: true);
         m_Player_Sprint = m_Player.FindAction("Sprint", throwIfNotFound: true);
+        m_Player_RecordStart = m_Player.FindAction("RecordStart", throwIfNotFound: true);
+        m_Player_RecordFinish = m_Player.FindAction("RecordFinish", throwIfNotFound: true);
+        m_Player_PlaybackStop = m_Player.FindAction("PlaybackStop", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1255,6 +1318,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Previous;
     private readonly InputAction m_Player_Next;
     private readonly InputAction m_Player_Sprint;
+    private readonly InputAction m_Player_RecordStart;
+    private readonly InputAction m_Player_RecordFinish;
+    private readonly InputAction m_Player_PlaybackStop;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1302,6 +1368,18 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Sprint".
         /// </summary>
         public InputAction @Sprint => m_Wrapper.m_Player_Sprint;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RecordStart".
+        /// </summary>
+        public InputAction @RecordStart => m_Wrapper.m_Player_RecordStart;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/RecordFinish".
+        /// </summary>
+        public InputAction @RecordFinish => m_Wrapper.m_Player_RecordFinish;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/PlaybackStop".
+        /// </summary>
+        public InputAction @PlaybackStop => m_Wrapper.m_Player_PlaybackStop;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1355,6 +1433,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Sprint.started += instance.OnSprint;
             @Sprint.performed += instance.OnSprint;
             @Sprint.canceled += instance.OnSprint;
+            @RecordStart.started += instance.OnRecordStart;
+            @RecordStart.performed += instance.OnRecordStart;
+            @RecordStart.canceled += instance.OnRecordStart;
+            @RecordFinish.started += instance.OnRecordFinish;
+            @RecordFinish.performed += instance.OnRecordFinish;
+            @RecordFinish.canceled += instance.OnRecordFinish;
+            @PlaybackStop.started += instance.OnPlaybackStop;
+            @PlaybackStop.performed += instance.OnPlaybackStop;
+            @PlaybackStop.canceled += instance.OnPlaybackStop;
         }
 
         /// <summary>
@@ -1393,6 +1480,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Sprint.started -= instance.OnSprint;
             @Sprint.performed -= instance.OnSprint;
             @Sprint.canceled -= instance.OnSprint;
+            @RecordStart.started -= instance.OnRecordStart;
+            @RecordStart.performed -= instance.OnRecordStart;
+            @RecordStart.canceled -= instance.OnRecordStart;
+            @RecordFinish.started -= instance.OnRecordFinish;
+            @RecordFinish.performed -= instance.OnRecordFinish;
+            @RecordFinish.canceled -= instance.OnRecordFinish;
+            @PlaybackStop.started -= instance.OnPlaybackStop;
+            @PlaybackStop.performed -= instance.OnPlaybackStop;
+            @PlaybackStop.canceled -= instance.OnPlaybackStop;
         }
 
         /// <summary>
@@ -1756,6 +1852,27 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnSprint(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RecordStart" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRecordStart(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "RecordFinish" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnRecordFinish(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PlaybackStop" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPlaybackStop(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
