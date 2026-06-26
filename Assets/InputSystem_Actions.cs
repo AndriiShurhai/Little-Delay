@@ -199,6 +199,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PlaybackPause"",
+                    ""type"": ""Button"",
+                    ""id"": ""d525fdaa-5a67-4b05-af02-7ffb118bcc8a"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -617,6 +626,17 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""PlaybackStop"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""5cac7687-6858-4c4f-9566-63efea55ba3f"",
+                    ""path"": ""<Keyboard>/o"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PlaybackPause"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1216,6 +1236,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RecordStart = m_Player.FindAction("RecordStart", throwIfNotFound: true);
         m_Player_RecordFinish = m_Player.FindAction("RecordFinish", throwIfNotFound: true);
         m_Player_PlaybackStop = m_Player.FindAction("PlaybackStop", throwIfNotFound: true);
+        m_Player_PlaybackPause = m_Player.FindAction("PlaybackPause", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1321,6 +1342,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RecordStart;
     private readonly InputAction m_Player_RecordFinish;
     private readonly InputAction m_Player_PlaybackStop;
+    private readonly InputAction m_Player_PlaybackPause;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1380,6 +1402,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/PlaybackStop".
         /// </summary>
         public InputAction @PlaybackStop => m_Wrapper.m_Player_PlaybackStop;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/PlaybackPause".
+        /// </summary>
+        public InputAction @PlaybackPause => m_Wrapper.m_Player_PlaybackPause;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1442,6 +1468,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackStop.started += instance.OnPlaybackStop;
             @PlaybackStop.performed += instance.OnPlaybackStop;
             @PlaybackStop.canceled += instance.OnPlaybackStop;
+            @PlaybackPause.started += instance.OnPlaybackPause;
+            @PlaybackPause.performed += instance.OnPlaybackPause;
+            @PlaybackPause.canceled += instance.OnPlaybackPause;
         }
 
         /// <summary>
@@ -1489,6 +1518,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackStop.started -= instance.OnPlaybackStop;
             @PlaybackStop.performed -= instance.OnPlaybackStop;
             @PlaybackStop.canceled -= instance.OnPlaybackStop;
+            @PlaybackPause.started -= instance.OnPlaybackPause;
+            @PlaybackPause.performed -= instance.OnPlaybackPause;
+            @PlaybackPause.canceled -= instance.OnPlaybackPause;
         }
 
         /// <summary>
@@ -1873,6 +1905,13 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPlaybackStop(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PlaybackPause" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPlaybackPause(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

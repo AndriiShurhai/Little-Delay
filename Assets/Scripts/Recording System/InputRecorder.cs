@@ -5,13 +5,14 @@ using UnityEngine;
 [DefaultExecutionOrder(10)]
 public class InputRecorder : MonoBehaviour
 {
+    public bool IsRecording => isRecording;
+
     private List<FrameInput> inputFrames = new();
     private bool isRecording = false;
     private bool jumpPressedThisFixedFrame = false;
     private Vector2 accumulatedLookDelta = Vector2.zero;
 
     private Vector3 recordingStartPosition;
-    private Vector3 recordingStartRotation;
 
     private Quaternion recordingStartBodyRotation;
     private Vector3 recordingStartCameraRotation;
@@ -20,7 +21,8 @@ public class InputRecorder : MonoBehaviour
 
     private void Start()
     {
-        GameInput.Instance.OnJumpAction += HandleJump;
+        if (GameInput.Instance != null)
+            GameInput.Instance.OnJumpAction += HandleJump;
     }
 
     private void OnDestroy()

@@ -12,7 +12,8 @@ public class RecordingManager : MonoBehaviour
     [SerializeField] private PlayerInputSource playerInputSource;
     [SerializeField] private InputRecorder inputRecorder;
 
-
+    private bool playbackPauseToggle = false;
+    private Vector3 randomForceDirection;
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -32,8 +33,14 @@ public class RecordingManager : MonoBehaviour
         GameInput.Instance.OnRecordAction += GameInput_OnRecordAction;
         GameInput.Instance.OnRecordStopAction += GameInput_OnRecordStopAction;
         GameInput.Instance.OnPlaybackStopAction += GameInput_OnPlaybackStopAction;
+        GameInput.Instance.OnPlaybackPauseAction += Instance_OnPlayBackPauseAction;
     }
 
+    private void Instance_OnPlayBackPauseAction(object sender, EventArgs e)
+    {
+        randomForceDirection = new Vector3(UnityEngine.Random.Range(-1f, 1f), UnityEngine.Random.Range(0f, 1f), UnityEngine.Random.Range(-1f, 1f)).normalized;
+        PlayerController.Instance.ApplyDeflectionForce(randomForceDirection * 30f);
+    }
 
     private void Update()
     {

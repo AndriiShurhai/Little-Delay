@@ -34,6 +34,10 @@ public class PlayerController : MonoBehaviour
 
     private bool pendingJump = false;
 
+    private bool forcePending = false;
+    private bool justRecovered = false;
+    public bool IsDeflected { get; private set; }
+
     public bool IsPlayingBack => isPlaybackActive;
 
     public Vector3 StartPosition => startPosition;
@@ -84,26 +88,71 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        isGrounded = Physics.Raycast(transform.position, Vector3.down, (playerHeight * 0.5f) + 0.2f, groundLayer);
+        Vector3 rayStart = transform.position + (Vector3.down * (playerHeight * 0.4f));
+
+        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 0.4f, groundLayer, QueryTriggerInteraction.Ignore))
+        {
+            isGrounded = true;
+        }
+        else
+        {
+            isGrounded = false;
+        }
+        justRecovered = false; 
+
+        if (IsDeflected)
+        {
+            if (forcePending)
+            {
+                forcePending = false;
+            }
+            else
+            {
+                Vector2 horizontalVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.z);
+
+                // --- THE FIX ---
+                // We added:  && rb.linearVelocity.y <= 1f
+                // This means: "Only recover if we are touching the ground, not sliding fast, 
+                // AND we are not currently rocketing upwards into the sky."
+                if (isGrounded && horizontalVelocity.magnitude <= moveSpeed + 1f && rb.linearVelocity.y <= 1f)
+                {
+                    IsDeflected = false;
+                    justRecovered = true;
+
+                    rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+                }
+            }
+        }
 
         if (pendingJump)
         {
-            if (isGrounded)
+            if (isGrounded && !IsDeflected)
             {
                 rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
                 rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
             }
-            pendingJump = false; 
+            pendingJump = false;
         }
 
         HandleMovement();
     }
     public void HandleMovement()
     {
-        Vector3 moveDirection;
+        Vector3 moveDirection = Vector3.zero;
+
+        if (isPlaybackActive && (IsDeflected || justRecovered))
+        {
+            CurrentMoveDirection = Vector3.zero;
+            return; // Yield to physics. Do NOT pull a frame from the timeline.
+        }
 
         if (isPlaybackActive)
         {
+            if (inputSource is InputPlayback playback)
+            {
+                playback.AdvanceTimeline();
+            }
+
             moveDirection = inputSource.GetWorldMoveDirection();
         }
         else
@@ -127,6 +176,21 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public void ApplyDeflectionForce(Vector3 force)
+    {
+        if (!isPlaybackActive) return;
+
+        Debug.Assert(!forcePending,
+            "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
+
+        IsDeflected = true;
+        forcePending = true;
+        pendingJump = false; // Cancel any jump queue so they don't double-jump on landing
+
+        rb.linearVelocity = Vector3.zero;
+        rb.AddForce(force, ForceMode.Impulse);
+    }
+
     private void GameInput_OnJumpAction()
     {
         pendingJump = true;
@@ -138,5 +202,20 @@ public class PlayerController : MonoBehaviour
         {
             inputSource.OnJumpPressed -= GameInput_OnJumpAction;
         }
+    }
+
+    private void OnDrawGizmos()
+    {
+        // Draw the Raycast start position and length
+        Vector3 rayStart = transform.position + (Vector3.down * (playerHeight * 0.4f));
+        float rayLength = 0.4f;
+
+        Gizmos.color = isGrounded ? Color.green : Color.red;
+
+        // Draw a little sphere at the start point
+        Gizmos.DrawWireSphere(rayStart, 0.1f);
+
+        // Draw the actual ray pointing down
+        Gizmos.DrawLine(rayStart, rayStart + (Vector3.down * rayLength));
     }
 }

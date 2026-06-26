@@ -6,13 +6,21 @@ public class InputPlayback : MonoBehaviour, IInputSource
 {
     public event Action OnJumpPressed;
 
+    public enum PlaybackState
+    {
+        Playing,
+        Paused,
+        Stopped
+    }
+
     private Recording recording;
     private int currentFrameIndex = 0;
     private int lastConsumedIndex = 0;
-    private float playbackStartTime;
     private bool isPlayingBack = false;
 
     private Vector2 pendingLookDelta = Vector2.zero;
+
+    private PlaybackState playbackState;
 
     public bool IsPlayingBack => isPlayingBack;
 
@@ -26,6 +34,11 @@ public class InputPlayback : MonoBehaviour, IInputSource
     {
         if (!isPlayingBack || recording == null || lastConsumedIndex >= recording.Frames.Count)
             return Vector3.zero;
+
+        // Ensure no phantom inputs are sent while deflected
+        if (PlayerController.Instance.IsDeflected)
+            return Vector3.zero;
+
         return recording.Frames[lastConsumedIndex].worldMoveDirection;
     }
 
@@ -58,18 +71,44 @@ public class InputPlayback : MonoBehaviour, IInputSource
         Physics.SyncTransforms();
 
         PlayerController.Instance.SetInputSource(this);
+
+        playbackState = PlaybackState.Playing;
         isPlayingBack = true;
+    }
+
+    public void PausePlayback()
+    {
+        if (isPlayingBack)
+        {
+            playbackState = PlaybackState.Paused;
+            isPlayingBack = false;
+        }
+    }
+
+    public void ResumePlayback()
+    {
+        if (playbackState == PlaybackState.Paused)
+        {
+            playbackState = PlaybackState.Playing;
+            isPlayingBack = true;
+        }
     }
 
     public void StopPlayback()
     {
+        Debug.Assert(recording != null && currentFrameIndex == recording.Frames.Count,
+            $"[PLAYBACK FATAL] Frame count mismatch! Expected {recording?.Frames.Count}, but stopped at {currentFrameIndex}.");
         isPlayingBack = false;
+        playbackState = PlaybackState.Stopped;
     }
 
-    private void FixedUpdate()
+    public void AdvanceTimeline()
     {
         if (!isPlayingBack || recording == null || currentFrameIndex >= recording.Frames.Count)
             return;
+
+        Debug.Assert(!PlayerController.Instance.IsDeflected,
+            "[PLAYBACK FATAL] The timeline advanced while the player was in the Deflected state!");
 
         FrameInput currentFrame = recording.Frames[currentFrameIndex];
 
@@ -79,7 +118,6 @@ public class InputPlayback : MonoBehaviour, IInputSource
             OnJumpPressed?.Invoke();
 
         lastConsumedIndex = currentFrameIndex;
-
         currentFrameIndex++;
 
         if (currentFrameIndex >= recording.Frames.Count)

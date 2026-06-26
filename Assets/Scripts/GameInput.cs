@@ -15,6 +15,7 @@ public class GameInput : MonoBehaviour
     public event EventHandler OnRecordAction;
     public event EventHandler OnRecordStopAction;
     public event EventHandler OnPlaybackStopAction;
+    public event EventHandler OnPlaybackPauseAction;
     public bool IsJumpPressed => inputAction.Player.Jump.triggered;
 
     public enum Binding
@@ -51,6 +52,7 @@ public class GameInput : MonoBehaviour
         inputAction.Player.RecordStart.performed += RecordStart_performed;
         inputAction.Player.RecordFinish.performed += RecordStop_performed;
         inputAction.Player.PlaybackStop.performed += PlaybackStop_performed;
+        inputAction.Player.PlaybackPause.performed += PlaybackPause_performed;
     }
 
     private void Pause_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
@@ -61,6 +63,11 @@ public class GameInput : MonoBehaviour
     private void RecordStop_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         OnRecordStopAction?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void PlaybackPause_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
+    {
+        OnPlaybackPauseAction?.Invoke(this, EventArgs.Empty);
     }
 
     private void RecordStart_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
