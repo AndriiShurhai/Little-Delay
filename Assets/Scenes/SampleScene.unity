@@ -572,6 +572,38 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &440424491 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+  m_PrefabInstance: {fileID: 456418019379659623}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &440424493
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440424491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fba41e96de497d648b19ab53732db943, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DashAbility
+  cooldownTime: 1
+  dashForce: 10
+--- !u!114 &440424494
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 440424491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5388cd83ee8ccf5409c6c5dbac3162bd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AbilityManager
+  equippedMobility: {fileID: 440424493}
 --- !u!1 &468877542
 GameObject:
   m_ObjectHideFlags: 0
@@ -1849,7 +1881,13 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 440424494}
+    - targetCorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 440424493}
   m_SourcePrefab: {fileID: 100100000, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

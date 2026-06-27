@@ -114,7 +114,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""name"": ""Attack"",
                     ""type"": ""Button"",
                     ""id"": ""6c2ab1b8-8984-453a-af3d-a3c78ae1679a"",
-                    ""expectedControlType"": ""Button"",
+                    ""expectedControlType"": """",
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
@@ -204,6 +204,33 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""name"": ""PlaybackPause"",
                     ""type"": ""Button"",
                     ""id"": ""d525fdaa-5a67-4b05-af02-7ffb118bcc8a"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""PreviousAbility"",
+                    ""type"": ""Button"",
+                    ""id"": ""c49219ed-19d9-4f5e-bbb3-e8f82e6168e0"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""NextAbility"",
+                    ""type"": ""Button"",
+                    ""id"": ""d4a27e06-689d-4da6-a4a6-8bf937a5c506"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""UseAbility"",
+                    ""type"": ""Button"",
+                    ""id"": ""130c12b9-e5e2-4ebd-8576-e51de418154a"",
                     ""expectedControlType"": """",
                     ""processors"": """",
                     ""interactions"": """",
@@ -637,6 +664,39 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""PlaybackPause"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""d9759b8b-dc54-4071-9616-80319831d574"",
+                    ""path"": ""<Keyboard>/z"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""PreviousAbility"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""a0140f88-e04b-4ec1-b905-33e5a0f83543"",
+                    ""path"": ""<Keyboard>/x"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""NextAbility"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""1c5d2df7-91bb-4814-b8cb-61024bbc3d48"",
+                    ""path"": ""<Keyboard>/c"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""UseAbility"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1237,6 +1297,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RecordFinish = m_Player.FindAction("RecordFinish", throwIfNotFound: true);
         m_Player_PlaybackStop = m_Player.FindAction("PlaybackStop", throwIfNotFound: true);
         m_Player_PlaybackPause = m_Player.FindAction("PlaybackPause", throwIfNotFound: true);
+        m_Player_PreviousAbility = m_Player.FindAction("PreviousAbility", throwIfNotFound: true);
+        m_Player_NextAbility = m_Player.FindAction("NextAbility", throwIfNotFound: true);
+        m_Player_UseAbility = m_Player.FindAction("UseAbility", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -1343,6 +1406,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RecordFinish;
     private readonly InputAction m_Player_PlaybackStop;
     private readonly InputAction m_Player_PlaybackPause;
+    private readonly InputAction m_Player_PreviousAbility;
+    private readonly InputAction m_Player_NextAbility;
+    private readonly InputAction m_Player_UseAbility;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1406,6 +1472,18 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/PlaybackPause".
         /// </summary>
         public InputAction @PlaybackPause => m_Wrapper.m_Player_PlaybackPause;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/PreviousAbility".
+        /// </summary>
+        public InputAction @PreviousAbility => m_Wrapper.m_Player_PreviousAbility;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/NextAbility".
+        /// </summary>
+        public InputAction @NextAbility => m_Wrapper.m_Player_NextAbility;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/UseAbility".
+        /// </summary>
+        public InputAction @UseAbility => m_Wrapper.m_Player_UseAbility;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1471,6 +1549,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackPause.started += instance.OnPlaybackPause;
             @PlaybackPause.performed += instance.OnPlaybackPause;
             @PlaybackPause.canceled += instance.OnPlaybackPause;
+            @PreviousAbility.started += instance.OnPreviousAbility;
+            @PreviousAbility.performed += instance.OnPreviousAbility;
+            @PreviousAbility.canceled += instance.OnPreviousAbility;
+            @NextAbility.started += instance.OnNextAbility;
+            @NextAbility.performed += instance.OnNextAbility;
+            @NextAbility.canceled += instance.OnNextAbility;
+            @UseAbility.started += instance.OnUseAbility;
+            @UseAbility.performed += instance.OnUseAbility;
+            @UseAbility.canceled += instance.OnUseAbility;
         }
 
         /// <summary>
@@ -1521,6 +1608,15 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackPause.started -= instance.OnPlaybackPause;
             @PlaybackPause.performed -= instance.OnPlaybackPause;
             @PlaybackPause.canceled -= instance.OnPlaybackPause;
+            @PreviousAbility.started -= instance.OnPreviousAbility;
+            @PreviousAbility.performed -= instance.OnPreviousAbility;
+            @PreviousAbility.canceled -= instance.OnPreviousAbility;
+            @NextAbility.started -= instance.OnNextAbility;
+            @NextAbility.performed -= instance.OnNextAbility;
+            @NextAbility.canceled -= instance.OnNextAbility;
+            @UseAbility.started -= instance.OnUseAbility;
+            @UseAbility.performed -= instance.OnUseAbility;
+            @UseAbility.canceled -= instance.OnUseAbility;
         }
 
         /// <summary>
@@ -1912,6 +2008,27 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPlaybackPause(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "PreviousAbility" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnPreviousAbility(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "NextAbility" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnNextAbility(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "UseAbility" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnUseAbility(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.

@@ -36,6 +36,9 @@ public class PlayerController : MonoBehaviour
 
     private bool forcePending = false;
     private bool justRecovered = false;
+
+    private AbilityManager abilityManager;
+    private bool pendingAbilityUse = false;
     public bool IsDeflected { get; private set; }
 
     public bool IsPlayingBack => isPlaybackActive;
@@ -68,11 +71,19 @@ public class PlayerController : MonoBehaviour
     private void Start()
     {
         rb = GetComponent<Rigidbody>();
+        abilityManager = GetComponent<AbilityManager>();
+
+        GameInput.Instance.OnUseAbilityAction += Instance_OnUseAbilityAction;
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate; 
 
         startPosition = transform.position;
         startRotation = transform.eulerAngles;
+    }
+
+    private void Instance_OnUseAbilityAction()
+    {
+        pendingAbilityUse = true;
     }
 
     private void Update()
@@ -140,11 +151,13 @@ public class PlayerController : MonoBehaviour
     {
         Vector3 moveDirection = Vector3.zero;
 
-        if (isPlaybackActive && (IsDeflected || justRecovered))
+        if ((IsDeflected || justRecovered))
         {
             CurrentMoveDirection = Vector3.zero;
             return; // Yield to physics. Do NOT pull a frame from the timeline.
         }
+
+        bool tryAbilityUse = false;
 
         if (isPlaybackActive)
         {
@@ -159,6 +172,12 @@ public class PlayerController : MonoBehaviour
         {
             Vector2 inputVector = inputSource.GetMoveDirection();
             moveDirection = (cachedForward * inputVector.y) + (cachedRight * inputVector.x);
+
+            if (pendingAbilityUse)
+            {
+                tryAbilityUse = true;
+                pendingAbilityUse = false;
+            }
         }
 
         CurrentMoveDirection = moveDirection;
@@ -174,11 +193,16 @@ public class PlayerController : MonoBehaviour
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRotation, 10f * Time.fixedDeltaTime));
         }
+
+        if (tryAbilityUse)
+        {
+            Debug.Log("Attempting to use ability");
+            abilityManager.TryUseMobility(moveDirection == Vector3.zero ? transform.forward : moveDirection);
+        }
     }
 
     public void ApplyDeflectionForce(Vector3 force)
     {
-        if (!isPlaybackActive) return;
 
         Debug.Assert(!forcePending,
             "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
@@ -188,7 +212,7 @@ public class PlayerController : MonoBehaviour
         pendingJump = false; // Cancel any jump queue so they don't double-jump on landing
 
         rb.linearVelocity = Vector3.zero;
-        rb.AddForce(force, ForceMode.Impulse);
+        rb.AddForce(force, ForceMode.VelocityChange);
     }
 
     private void GameInput_OnJumpAction()
