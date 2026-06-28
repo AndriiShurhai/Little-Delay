@@ -1,4 +1,5 @@
 ﻿using System;
+using Unity.VisualScripting;
 using UnityEngine;
 
 [DefaultExecutionOrder(-10)]
@@ -6,124 +7,125 @@ public class InputPlayback : MonoBehaviour, IInputSource
 {
     public event Action OnJumpPressed;
 
-    public enum PlaybackState
+    public event Action OnPlaybackCompleted;
+
+    public enum PlaybackState { Playing, Paused, Stopped }
+    public bool IsPlayback => true;
+    public bool IsPlayingBack => _playbackState == PlaybackState.Playing;
+
+    private Recording _recording;
+    private int _currentFrameIndex;
+    private int _lastConsumedIndex;
+    private Vector2 _pendingLookDelta;
+    private PlaybackState _playbackState = PlaybackState.Stopped;
+
+    public Vector2 GetMoveInput()
     {
-        Playing,
-        Paused,
-        Stopped
-    }
-
-    private Recording recording;
-    private int currentFrameIndex = 0;
-    private int lastConsumedIndex = 0;
-    private bool isPlayingBack = false;
-
-    private Vector2 pendingLookDelta = Vector2.zero;
-
-    private PlaybackState playbackState;
-
-    public bool IsPlayingBack => isPlayingBack;
-
-    public Vector2 GetMoveDirection()
-    {
-        if (!isPlayingBack || recording == null || lastConsumedIndex >= recording.Frames.Count)
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
             return Vector2.zero;
-        return recording.Frames[lastConsumedIndex].moveDirection;
+
+        return _recording.Frames[_lastConsumedIndex].moveInput;
     }
+
     public Vector3 GetWorldMoveDirection()
     {
-        if (!isPlayingBack || recording == null || lastConsumedIndex >= recording.Frames.Count)
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
             return Vector3.zero;
 
-        // Ensure no phantom inputs are sent while deflected
         if (PlayerController.Instance.IsDeflected)
             return Vector3.zero;
 
-        return recording.Frames[lastConsumedIndex].worldMoveDirection;
+        return _recording.Frames[_lastConsumedIndex].worldMoveDirection;
     }
 
     public Vector2 GetLookDelta()
     {
-        if (!isPlayingBack || recording == null)
+        if (!IsPlayingBack || _recording == null)
             return Vector2.zero;
 
-        Vector2 delta = pendingLookDelta;
-        pendingLookDelta = Vector2.zero; 
+        Vector2 delta = _pendingLookDelta;
+        _pendingLookDelta = Vector2.zero;
         return delta;
+    }
+
+    public void Tick()
+    {
+        AdvanceTimeline();
     }
 
     public void StartPlayback(Recording recording)
     {
-        this.recording = recording;
-        currentFrameIndex = 0;
-        lastConsumedIndex = 0;
-        pendingLookDelta = Vector2.zero;
+        _recording = recording;
+        _currentFrameIndex = 0;
+        _lastConsumedIndex = 0;
+        _pendingLookDelta = Vector2.zero;
 
         Rigidbody rb = PlayerController.Instance.GetComponent<Rigidbody>();
-
         rb.position = recording.StartPosition;
         rb.rotation = recording.StartBodyRotation;
         rb.linearVelocity = recording.StartVelocity;
         rb.angularVelocity = recording.StartAngularVelocity;
 
-        PlayerController.Instance.transform.GetComponentInChildren<CameraTargetController>().SetRotation(recording.StartCameraRotation);
+        PlayerController.Instance
+            .GetComponentInChildren<CameraTargetController>()
+            .SetRotation(recording.StartCameraRotation);
 
         Physics.SyncTransforms();
 
-        PlayerController.Instance.SetInputSource(this);
-
-        playbackState = PlaybackState.Playing;
-        isPlayingBack = true;
+        _playbackState = PlaybackState.Playing;
     }
 
     public void PausePlayback()
     {
-        if (isPlayingBack)
+        if (_playbackState == PlaybackState.Playing)
         {
-            playbackState = PlaybackState.Paused;
-            isPlayingBack = false;
+            _playbackState = PlaybackState.Paused;
         }
     }
 
     public void ResumePlayback()
     {
-        if (playbackState == PlaybackState.Paused)
+        if (_playbackState == PlaybackState.Paused)
         {
-            playbackState = PlaybackState.Playing;
-            isPlayingBack = true;
+            _playbackState = PlaybackState.Playing;
         }
     }
 
     public void StopPlayback()
     {
-        Debug.Assert(recording != null && currentFrameIndex == recording.Frames.Count,
-            $"[PLAYBACK FATAL] Frame count mismatch! Expected {recording?.Frames.Count}, but stopped at {currentFrameIndex}.");
-        isPlayingBack = false;
-        playbackState = PlaybackState.Stopped;
+        Debug.Assert(
+            _recording != null && _currentFrameIndex == _recording.Frames.Count,
+            $"[PLAYBACK FATAL] Frame count mismatch! Expected {_recording?.Frames.Count}, stopped at {_currentFrameIndex}.");
+
+        _playbackState = PlaybackState.Stopped;
     }
 
-    public void AdvanceTimeline()
+    private void AdvanceTimeline()
     {
-        if (!isPlayingBack || recording == null || currentFrameIndex >= recording.Frames.Count)
+        if (!IsPlayingBack || _recording == null || _currentFrameIndex >= _recording.Frames.Count)
             return;
+
 
         Debug.Assert(!PlayerController.Instance.IsDeflected,
             "[PLAYBACK FATAL] The timeline advanced while the player was in the Deflected state!");
 
-        FrameInput currentFrame = recording.Frames[currentFrameIndex];
+        FrameInput currentFrame = _recording.Frames[_currentFrameIndex];
 
-        pendingLookDelta += currentFrame.lookDelta;
+        _pendingLookDelta += currentFrame.lookDelta;
 
         if (currentFrame.jumpPressed)
+        {
             OnJumpPressed?.Invoke();
+        }
+        
+        _lastConsumedIndex = _currentFrameIndex;
+        _currentFrameIndex++;
 
-        lastConsumedIndex = currentFrameIndex;
-        currentFrameIndex++;
-
-        if (currentFrameIndex >= recording.Frames.Count)
+        if (_currentFrameIndex >= _recording.Frames.Count)
         {
             StopPlayback();
-            Debug.Log("Playback finished.");
+            OnPlaybackCompleted?.Invoke();
         }
     }
+
 }

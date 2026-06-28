@@ -6,8 +6,11 @@ using UnityEngine;
 
 public interface IInputSource
 {
-    event Action OnJumpPressed;
-    Vector2 GetMoveDirection();
-    Vector3 GetWorldMoveDirection();
-    Vector2 GetLookDelta();
+    public event Action OnJumpPressed;
+
+    public bool IsPlayback { get; }
+    public Vector2 GetMoveInput();
+    public Vector3 GetWorldMoveDirection();
+    public Vector2 GetLookDelta();
+    public void Tick();
 }

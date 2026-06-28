@@ -1,21 +1,26 @@
 ﻿using UnityEngine;
 
-// I renamed this to PlayerLoadout to match the code you just put in PlayerController.cs!
 public class AbilityManager : MonoBehaviour
 {
     [Header("Loadout Slots")]
-    // Strict slots make it easy for the UI to read and the opponent to predict
-    [SerializeField] private BaseAbility equippedMobility;
+    [SerializeField] private BaseAbility _equippedMobility;
 
-    // We will add equippedWeapon and equippedTactical here later!
+    private void Start()
+    {
+        ICharacterPhysics owner = GetComponentInParent<ICharacterPhysics>();
 
-    // The PlayerController passes the exact direction (either Live Mouse or Recorded Vector)
+        if (owner == null)
+        {
+            Debug.LogError($"[AbilityManager] No ICharacterPhysics found on {gameObject.name} or its parents.", this);
+            return;
+        }
+
+        if (_equippedMobility != null)
+            _equippedMobility.Initialize(owner);
+    }
+
     public void TryUseMobility(Vector3 direction)
     {
-        if (equippedMobility != null)
-        {
-            Debug.Log($"Using mobility ability: {equippedMobility.name} in direction {direction}");
-            equippedMobility.Execute(direction);
-        }
+        _equippedMobility?.Execute(direction);
     }
 }

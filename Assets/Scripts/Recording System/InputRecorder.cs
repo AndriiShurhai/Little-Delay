@@ -5,86 +5,97 @@ using UnityEngine;
 [DefaultExecutionOrder(10)]
 public class InputRecorder : MonoBehaviour
 {
-    public bool IsRecording => isRecording;
+    public bool IsRecording => _isRecording;
 
-    private List<FrameInput> inputFrames = new();
-    private bool isRecording = false;
-    private bool jumpPressedThisFixedFrame = false;
-    private Vector2 accumulatedLookDelta = Vector2.zero;
+    private readonly List<FrameInput> _inputFrames = new();
 
-    private Vector3 recordingStartPosition;
+    private bool _isRecording;
+    private bool _jumpPressedThisFixedFrame;
 
-    private Quaternion recordingStartBodyRotation;
-    private Vector3 recordingStartCameraRotation;
-    private Vector3 recordingStartVelocity;
-    private Vector3 recordingStartAngularVelocity;
+    private Vector2 _accumulatedLookDelta;
+
+    private Vector3 _recordingStartPosition;
+    private Quaternion _recordingStartBodyRotation;
+    private Vector3 _recordingStartCameraRotation;
+    private Vector3 _recordingStartVelocity;
+    private Vector3 _recordingStartAngularVelocity;
+
+    private Rigidbody _playerRb;
+
+    private CameraTargetController _cameraTarget;
 
     private void Start()
     {
-        if (GameInput.Instance != null)
-            GameInput.Instance.OnJumpAction += HandleJump;
+        _playerRb = PlayerController.Instance.GetComponent<Rigidbody>();
+        _cameraTarget = PlayerController.Instance.GetComponentInChildren<CameraTargetController>();
+
+        GameInput.Instance.OnJumpAction += HandleJump;
     }
 
     private void OnDestroy()
     {
         if (GameInput.Instance != null)
+        {
             GameInput.Instance.OnJumpAction -= HandleJump;
+        }
     }
 
-    private void HandleJump(object sender, EventArgs e)
+    private void HandleJump()
     {
-        if (isRecording)
-            jumpPressedThisFixedFrame = true;
+        if (_isRecording)
+        {
+            _jumpPressedThisFixedFrame = true;
+        }
     }
 
     private void Update()
     {
-        if (!isRecording) return;
-        accumulatedLookDelta += GameInput.Instance.GetLookVector(); // accumulate every Update tick
+        if (!_isRecording) return;
+
+        _accumulatedLookDelta += GameInput.Instance.GetLookVector();
     }
 
     public void StartRecording()
     {
-        inputFrames.Clear();
-        accumulatedLookDelta = Vector2.zero;
-        isRecording = true;
-        recordingStartPosition = PlayerController.Instance.transform.position;
-        recordingStartBodyRotation = PlayerController.Instance.transform.rotation;
-        recordingStartCameraRotation = PlayerController.Instance.transform.GetComponentInChildren<CameraTargetController>().GetCurrentRotation();
-        recordingStartVelocity = PlayerController.Instance.GetComponent<Rigidbody>().linearVelocity;
-        recordingStartAngularVelocity = PlayerController.Instance.GetComponent<Rigidbody>().angularVelocity;
+        _inputFrames.Clear();
+        _accumulatedLookDelta = Vector2.zero;
+        _isRecording = true;
+
+        _recordingStartPosition = PlayerController.Instance.transform.position;
+        _recordingStartBodyRotation = PlayerController.Instance.transform.rotation;
+        _recordingStartCameraRotation = _cameraTarget.GetCurrentRotation();
+        _recordingStartVelocity = _playerRb.linearVelocity;
+        _recordingStartAngularVelocity = _playerRb.angularVelocity;
     }
 
     public Recording StopRecording()
     {
-        isRecording = false;
+        _isRecording = false;
         return new Recording(
-            inputFrames,
-            recordingStartPosition,
-            recordingStartBodyRotation,
-            recordingStartCameraRotation,
-            recordingStartVelocity,
-            recordingStartAngularVelocity
+            _inputFrames,
+            _recordingStartPosition,
+            _recordingStartBodyRotation,
+            _recordingStartCameraRotation,
+            _recordingStartVelocity,
+            _recordingStartAngularVelocity
         );
     }
 
     private void FixedUpdate()
     {
-        if (!isRecording) return;
+        if (!_isRecording) return;
 
-        inputFrames.Add(new FrameInput
+        _inputFrames.Add(new FrameInput
         {
-            moveDirection = GameInput.Instance.GetMovementVectorNormalized(),
-
+            moveInput = GameInput.Instance.GetMovementVectorNormalized(),
             worldMoveDirection = PlayerController.Instance.CurrentMoveDirection,
-
-            lookDelta = accumulatedLookDelta,
-            jumpPressed = jumpPressedThisFixedFrame,
+            lookDelta = _accumulatedLookDelta,
+            jumpPressed = _jumpPressedThisFixedFrame,
             firePressed = false,
             abilityPressed = false
         });
 
-        accumulatedLookDelta = Vector2.zero;
-        jumpPressedThisFixedFrame = false;
+        _accumulatedLookDelta = Vector2.zero;
+        _jumpPressedThisFixedFrame = false;
     }
 }

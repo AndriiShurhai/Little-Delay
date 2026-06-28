@@ -8,59 +8,81 @@ public class RecordingManager : MonoBehaviour
 {
     public static RecordingManager Instance { get; private set; }
 
-    [SerializeField] private InputPlayback inputPlayback;
-    [SerializeField] private PlayerInputSource playerInputSource;
-    [SerializeField] private InputRecorder inputRecorder;
+    [SerializeField] private InputPlayback _inputPlayback;
+    [SerializeField] private PlayerInputSource _playerInputSource;
+    [SerializeField] private InputRecorder _inputRecorder;
 
-    private bool playbackPauseToggle = false;
-    private Vector3 randomForceDirection;
     private void Awake()
     {
         if (Instance != null && Instance != this)
         {
-            Destroy(this.gameObject);
+            Destroy(gameObject);
+            return;
         }
-        else
-        {
-            Instance = this;
-        }
+        Instance = this;
     }
 
     private void Start()
     {
-        PlayerController.Instance.SetInputSource(playerInputSource);
+        PlayerController.Instance.SetInputSource(_playerInputSource);
 
-        GameInput.Instance.OnRecordAction += GameInput_OnRecordAction;
-        GameInput.Instance.OnRecordStopAction += GameInput_OnRecordStopAction;
-        GameInput.Instance.OnPlaybackStopAction += GameInput_OnPlaybackStopAction;
-        GameInput.Instance.OnPlaybackPauseAction += Instance_OnPlayBackPauseAction;
+        GameInput.Instance.OnRecordAction += OnRecordStart;
+        GameInput.Instance.OnRecordStopAction += OnRecordStop;
+        GameInput.Instance.OnPlaybackStopAction += OnPlaybackStop;
+        GameInput.Instance.OnPlaybackPauseAction += OnPlaybackPause;
+
+        _inputPlayback.OnPlaybackCompleted += OnPlaybackFinished;
     }
 
-    private void Instance_OnPlayBackPauseAction(object sender, EventArgs e)
+    private void OnDestroy()
     {
-        randomForceDirection = new Vector3(UnityEngine.Random.Range(-1f, 1f), UnityEngine.Random.Range(0f, 1f), UnityEngine.Random.Range(-1f, 1f)).normalized;
-        PlayerController.Instance.ApplyDeflectionForce(randomForceDirection * 30f);
+        if (GameInput.Instance != null)
+        {
+            GameInput.Instance.OnRecordAction -= OnRecordStart;
+            GameInput.Instance.OnRecordStopAction -= OnRecordStop;
+            GameInput.Instance.OnPlaybackStopAction -= OnPlaybackStop;
+            GameInput.Instance.OnPlaybackPauseAction -= OnPlaybackPause;
+        }
+
+        _inputPlayback.OnPlaybackCompleted -= OnPlaybackFinished;
     }
 
-    private void Update()
+    private void OnRecordStart()
     {
-
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+        _inputRecorder.StartRecording();
     }
 
-    private void GameInput_OnPlaybackStopAction(object sender, EventArgs e)
+    private void OnRecordStop()
     {
-        inputPlayback.StopPlayback();
-        PlayerController.Instance.SetInputSource(playerInputSource);
-    }
-    private void GameInput_OnRecordAction(object sender, EventArgs e)
-    {
-        PlayerController.Instance.SetInputSource(playerInputSource);
-        inputRecorder.StartRecording();
+        Recording recording = _inputRecorder.StopRecording();
+        _inputPlayback.StartPlayback(recording);
+
+        PlayerController.Instance.SetInputSource(_inputPlayback);
     }
 
-    private void GameInput_OnRecordStopAction(object sender, EventArgs e)
+    private void OnPlaybackStop()
     {
-        Recording recording = inputRecorder.StopRecording();
-        inputPlayback.StartPlayback(recording);
+        _inputPlayback.StopPlayback();
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+    }
+
+    private void OnPlaybackFinished()
+    {
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+    }
+
+    private void OnPlaybackPause()
+    {
+#if UNITY_EDITOR
+        // Debug: apply a random deflection force to test the physics recovery system.
+        Vector3 randomDirection = new Vector3(
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(0f, 1f),
+            UnityEngine.Random.Range(-1f, 1f)
+        ).normalized;
+
+        PlayerController.Instance.ApplyDeflectionForce(randomDirection * 10f);
+#endif
     }
 }

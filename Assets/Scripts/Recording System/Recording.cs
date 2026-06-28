@@ -5,12 +5,12 @@ using UnityEngine;
 
 public class Recording
 {
-    public List<FrameInput> Frames;
-    public Vector3 StartPosition;
-    public Quaternion StartBodyRotation; 
-    public Vector3 StartCameraRotation;
-    public Vector3 StartVelocity;        
-    public Vector3 StartAngularVelocity; 
+    public IReadOnlyList<FrameInput> Frames { get; }
+    public Vector3 StartPosition { get; }
+    public Quaternion StartBodyRotation { get; }
+    public Vector3 StartCameraRotation { get; }
+    public Vector3 StartVelocity { get; }
+    public Vector3 StartAngularVelocity { get; }
 
     public Recording(
         List<FrameInput> frames,
@@ -20,7 +20,7 @@ public class Recording
         Vector3 startVelocity,
         Vector3 startAngularVelocity)
     {
-        Frames = new List<FrameInput>(frames);
+        Frames = frames.AsReadOnly();
         StartPosition = startPosition;
         StartBodyRotation = startBodyRotation;
         StartCameraRotation = startCameraRotation;

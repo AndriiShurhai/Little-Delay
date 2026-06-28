@@ -1,53 +1,43 @@
 using System;
+using System.Linq.Expressions;
 using Unity.Cinemachine;
 using Unity.VisualScripting;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
-public class PlayerController : MonoBehaviour
+public class PlayerController : MonoBehaviour, ICharacterPhysics
 {
     public static PlayerController Instance { get; private set; }
 
+    public bool IsDeflected { get; private set; }
+    public bool IsPlayingBack { get; private set; }
+    public Vector3 CurrentMoveDirection { get; private set; }
+    public Vector3 StartPosition => _startPosition;
+
+    Transform ICharacterPhysics.Transform => transform;
+
     [Header("Movement Settings")]
-    [SerializeField] private float moveSpeed = 7f;
-    [SerializeField] private float jumpForce = 5f;
+    [SerializeField] private float _moveSpeed = 7f;
+    [SerializeField] private float _jumpForce = 5f;
 
     [Header("Ground Detection")]
-    [SerializeField] private float playerHeight = 2f;
-    [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private float _playerHeight = 2f;
+    [SerializeField] private LayerMask _groundLayer;
 
-    [Header("References")]
-    [SerializeField] private Transform cameraTarget; 
+    private Vector3 _startPosition;
+
+    private Rigidbody _rigidbody;
+    private IInputSource _inputSource;
+
+    private bool _isGrounded;
+    private bool _pendingJump;
+    private bool _pendingAbilityUse;
+    private bool _forcePending;
+    private bool _justRecovered;
+
+    private AbilityManager _abilityManager;
 
 
-    private Rigidbody rb;
-    private IInputSource inputSource;
-    private bool isGrounded;
-
-    private Vector3 startPosition;
-    private Vector3 startRotation;
-
-    private bool isPlaybackActive = false;
-
-    private Vector3 cachedForward;
-    private Vector3 cachedRight;
-
-    private bool pendingJump = false;
-
-    private bool forcePending = false;
-    private bool justRecovered = false;
-
-    private AbilityManager abilityManager;
-    private bool pendingAbilityUse = false;
-    public bool IsDeflected { get; private set; }
-
-    public bool IsPlayingBack => isPlaybackActive;
-
-    public Vector3 StartPosition => startPosition;
-    public Vector3 StartRotation => startRotation;
-
-    public IInputSource InputSource => inputSource;
-    public Vector3 CurrentMoveDirection { get; private set; }
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -58,188 +48,159 @@ public class PlayerController : MonoBehaviour
         Instance = this;
     }
 
-    public void SetInputSource(IInputSource source)
-    {
-        if (inputSource != null)
-            inputSource.OnJumpPressed -= GameInput_OnJumpAction;
-
-        isPlaybackActive = source is InputPlayback;
-        inputSource = source;
-        inputSource.OnJumpPressed += GameInput_OnJumpAction;
-    }
-
     private void Start()
     {
-        rb = GetComponent<Rigidbody>();
-        abilityManager = GetComponent<AbilityManager>();
+        _rigidbody = GetComponent<Rigidbody>();
+        _abilityManager = GetComponent<AbilityManager>();
 
-        GameInput.Instance.OnUseAbilityAction += Instance_OnUseAbilityAction;
-        rb.freezeRotation = true;
-        rb.interpolation = RigidbodyInterpolation.Interpolate; 
+        _rigidbody.freezeRotation = true;
+        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
 
-        startPosition = transform.position;
-        startRotation = transform.eulerAngles;
+        _startPosition = transform.position;
+
+        GameInput.Instance.OnUseAbilityAction += OnUseAbilityInput;
     }
 
-    private void Instance_OnUseAbilityAction()
+    private void OnDestroy()
     {
-        pendingAbilityUse = true;
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+        }
+
+        if (GameInput.Instance != null)
+        {
+            GameInput.Instance.OnUseAbilityAction -= OnUseAbilityInput;
+        }
     }
 
-    private void Update()
+    public void SetInputSource(IInputSource inputSource)
     {
-        cachedForward = cameraTarget.forward;
-        cachedForward.y = 0f;
-        cachedForward.Normalize();
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+        }
+        _inputSource = inputSource;
+        _inputSource.OnJumpPressed += OnJumpInput;
 
-        cachedRight = cameraTarget.right;
-        cachedRight.y = 0f;
-        cachedRight.Normalize();
+        if (_inputSource is PlayerInputSource)
+        {
+            IsPlayingBack = false;
+        }
+        else if (_inputSource is InputPlayback)
+        {
+            IsPlayingBack = true;
+        }   
+    }
+
+    public IInputSource InputSource => _inputSource;
+
+    private void OnJumpInput()
+    {
+        _pendingJump = true;
+    }
+
+    private void OnUseAbilityInput()
+    {
+        _pendingAbilityUse = true;
     }
 
     private void FixedUpdate()
     {
-        Vector3 rayStart = transform.position + (Vector3.down * (playerHeight * 0.4f));
-
-        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 0.4f, groundLayer, QueryTriggerInteraction.Ignore))
-        {
-            isGrounded = true;
-        }
-        else
-        {
-            isGrounded = false;
-        }
-        justRecovered = false; 
-
-        if (IsDeflected)
-        {
-            if (forcePending)
-            {
-                forcePending = false;
-            }
-            else
-            {
-                Vector2 horizontalVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.z);
-
-                // --- THE FIX ---
-                // We added:  && rb.linearVelocity.y <= 1f
-                // This means: "Only recover if we are touching the ground, not sliding fast, 
-                // AND we are not currently rocketing upwards into the sky."
-                if (isGrounded && horizontalVelocity.magnitude <= moveSpeed + 1f && rb.linearVelocity.y <= 1f)
-                {
-                    IsDeflected = false;
-                    justRecovered = true;
-
-                    rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
-                }
-            }
-        }
-
-        if (pendingJump)
-        {
-            if (isGrounded && !IsDeflected)
-            {
-                rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-                rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            }
-            pendingJump = false;
-        }
-
+        UpdateGroundState();
+        ResolveDeflectionRecovery();
+        ResolveJump();
         HandleMovement();
     }
-    public void HandleMovement()
-    {
-        Vector3 moveDirection = Vector3.zero;
 
-        if ((IsDeflected || justRecovered))
+    private void UpdateGroundState()
+    {
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        _isGrounded = Physics.Raycast(rayStart, Vector3.down, 0.4f, _groundLayer, QueryTriggerInteraction.Ignore);
+        _justRecovered = false;
+    }
+
+    private void ResolveDeflectionRecovery()
+    {
+        if (!IsDeflected) return;
+        if (_forcePending)
+        {
+            _forcePending = false;
+            return;
+        }
+
+        Vector2 horizontalVelocity = new Vector2(_rigidbody.linearVelocity.x, _rigidbody.linearVelocity.z);
+        bool slowedDown = horizontalVelocity.magnitude <= _moveSpeed + 1f;
+        bool notRocketingUp = _rigidbody.linearVelocity.y <= 1f;
+
+        if (_isGrounded && slowedDown && notRocketingUp)
+        {
+            IsDeflected = false;
+            _justRecovered = true;
+            _rigidbody.linearVelocity = new Vector3(0f, _rigidbody.linearVelocity.y, 0f);
+        }
+    }
+
+    private void ResolveJump()
+    {
+        if (!_pendingJump) return;
+        _pendingJump = false;
+
+        if (_isGrounded && !IsDeflected)
+        {
+            _rigidbody.linearVelocity = new Vector3(_rigidbody.linearVelocity.x, 0f, _rigidbody.linearVelocity.z);
+            _rigidbody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
+        }
+    }
+
+    private void HandleMovement()
+    {
+        if (IsDeflected || _justRecovered)
         {
             CurrentMoveDirection = Vector3.zero;
-            return; // Yield to physics. Do NOT pull a frame from the timeline.
+            return; 
         }
 
-        bool tryAbilityUse = false;
+        _inputSource.Tick();
 
-        if (isPlaybackActive)
-        {
-            if (inputSource is InputPlayback playback)
-            {
-                playback.AdvanceTimeline();
-            }
-
-            moveDirection = inputSource.GetWorldMoveDirection();
-        }
-        else
-        {
-            Vector2 inputVector = inputSource.GetMoveDirection();
-            moveDirection = (cachedForward * inputVector.y) + (cachedRight * inputVector.x);
-
-            if (pendingAbilityUse)
-            {
-                tryAbilityUse = true;
-                pendingAbilityUse = false;
-            }
-        }
-
+        Vector3 moveDirection = _inputSource.GetWorldMoveDirection();
         CurrentMoveDirection = moveDirection;
 
-        rb.linearVelocity = new Vector3(
-            moveDirection.x * moveSpeed,
-            rb.linearVelocity.y,
-            moveDirection.z * moveSpeed
-        );
+        _rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
 
         if (moveDirection != Vector3.zero)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRotation, 10f * Time.fixedDeltaTime));
+            _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
         }
 
-        if (tryAbilityUse)
+        if (!InputSource.IsPlayback && _pendingAbilityUse)
         {
-            Debug.Log("Attempting to use ability");
-            abilityManager.TryUseMobility(moveDirection == Vector3.zero ? transform.forward : moveDirection);
+            _pendingAbilityUse = false;
+            Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
+            _abilityManager?.TryUseMobility(abilityDirection);
         }
     }
 
     public void ApplyDeflectionForce(Vector3 force)
     {
-
-        Debug.Assert(!forcePending,
+        Debug.Assert(!_forcePending,
             "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
 
         IsDeflected = true;
-        forcePending = true;
-        pendingJump = false; // Cancel any jump queue so they don't double-jump on landing
+        _forcePending = true;
+        _pendingJump = false;
 
-        rb.linearVelocity = Vector3.zero;
-        rb.AddForce(force, ForceMode.VelocityChange);
-    }
-
-    private void GameInput_OnJumpAction()
-    {
-        pendingJump = true;
-    }
-
-    private void OnDestroy()
-    {
-        if (inputSource != null)
-        {
-            inputSource.OnJumpPressed -= GameInput_OnJumpAction;
-        }
+        _rigidbody.linearVelocity = Vector3.zero;
+        _rigidbody.AddForce(force, ForceMode.VelocityChange);
     }
 
     private void OnDrawGizmos()
     {
-        // Draw the Raycast start position and length
-        Vector3 rayStart = transform.position + (Vector3.down * (playerHeight * 0.4f));
-        float rayLength = 0.4f;
-
-        Gizmos.color = isGrounded ? Color.green : Color.red;
-
-        // Draw a little sphere at the start point
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        Gizmos.color = _isGrounded ? Color.green : Color.red;
         Gizmos.DrawWireSphere(rayStart, 0.1f);
-
-        // Draw the actual ray pointing down
-        Gizmos.DrawLine(rayStart, rayStart + (Vector3.down * rayLength));
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 0.4f);
     }
+
 }

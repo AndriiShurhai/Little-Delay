@@ -589,8 +589,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fba41e96de497d648b19ab53732db943, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DashAbility
-  cooldownTime: 1
-  dashForce: 10
+  _cooldownTime: 1
+  _dashForce: 5
 --- !u!114 &440424494
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -603,7 +603,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5388cd83ee8ccf5409c6c5dbac3162bd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AbilityManager
-  equippedMobility: {fileID: 440424493}
+  _equippedMobility: {fileID: 440424493}
 --- !u!1 &468877542
 GameObject:
   m_ObjectHideFlags: 0
@@ -789,6 +789,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3a62e8a08bbc285469a52b91eb33339b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInputSource
+  _cameraTarget: {fileID: 1517512996}
 --- !u!4 &719820674
 Transform:
   m_ObjectHideFlags: 0
@@ -833,9 +834,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d958f330501faa4caa47d6f4149a2df, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RecordingManager
-  inputPlayback: {fileID: 1283665579}
-  playerInputSource: {fileID: 719820673}
-  inputRecorder: {fileID: 61151839}
+  _inputPlayback: {fileID: 1283665579}
+  _playerInputSource: {fileID: 719820673}
+  _inputRecorder: {fileID: 61151839}
 --- !u!4 &756957147
 Transform:
   m_ObjectHideFlags: 0
@@ -1877,6 +1878,14 @@ PrefabInstance:
     - target: {fileID: 6685058777432189011, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_Layer
       value: 7
+      objectReference: {fileID: 0}
+    - target: {fileID: 8273379291693062885, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+      propertyPath: _jumpForce
+      value: 15
+      objectReference: {fileID: 0}
+    - target: {fileID: 8273379291693062885, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+      propertyPath: _groundLayer.m_Bits
+      value: 64
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

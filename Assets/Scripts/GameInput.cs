@@ -4,24 +4,22 @@ using UnityEngine.InputSystem;
 
 public class GameInput : MonoBehaviour
 {
+    public static GameInput Instance { get; private set; }
+
     private const string PLAYER_PREFS_BINDINGS = "InputBindings";
 
-    private InputSystem_Actions inputAction;
+    private InputSystem_Actions inputActions;
 
-    public event EventHandler OnPauseAction;
-    public event EventHandler OnBindingRebinding;
-
-    public event EventHandler OnJumpAction;
-    public event EventHandler OnRecordAction;
-    public event EventHandler OnRecordStopAction;
-    public event EventHandler OnPlaybackStopAction;
-    public event EventHandler OnPlaybackPauseAction;
-
-
+    public event Action OnPauseAction;
+    public event Action OnBindingRebinding;
+    public event Action OnJumpAction;
+    public event Action OnRecordAction;
+    public event Action OnRecordStopAction;
+    public event Action OnPlaybackStopAction;
+    public event Action OnPlaybackPauseAction;
     public event Action OnPreviousAbilityAction;
     public event Action OnNextAbilityAction;
     public event Action OnUseAbilityAction;
-    public bool IsJumpPressed => inputAction.Player.Jump.triggered;
 
     public enum Binding
     {
@@ -31,10 +29,8 @@ public class GameInput : MonoBehaviour
         MoveRight,
         Jump,
         Pause,
-
         GamepadPause
     }
-    public static GameInput Instance { get; private set; }
 
     private void Awake()
     {
@@ -44,167 +40,113 @@ public class GameInput : MonoBehaviour
             return;
         }
         Instance = this;
-        inputAction = new InputSystem_Actions();
+
+        inputActions = new InputSystem_Actions();
 
         if (PlayerPrefs.HasKey(PLAYER_PREFS_BINDINGS))
-        {
-            inputAction.LoadBindingOverridesFromJson(PlayerPrefs.GetString(PLAYER_PREFS_BINDINGS));
-        }
+            inputActions.LoadBindingOverridesFromJson(PlayerPrefs.GetString(PLAYER_PREFS_BINDINGS));
 
-        inputAction.Player.Enable();
+        inputActions.Player.Enable();
 
-        inputAction.Player.Jump.performed += Jump_performed;
-        inputAction.Player.RecordStart.performed += RecordStart_performed;
-        inputAction.Player.RecordFinish.performed += RecordStop_performed;
-        inputAction.Player.PlaybackStop.performed += PlaybackStop_performed;
-        inputAction.Player.PlaybackPause.performed += PlaybackPause_performed;
-
-        inputAction.Player.PreviousAbility.performed += PreviousAbility_performed;
-        inputAction.Player.NextAbility.performed += NextAbility_performed;
-        inputAction.Player.UseAbility.performed += UseAbility_performed;
+        inputActions.Player.Jump.performed += OnJump_performed;
+        inputActions.Player.RecordStart.performed += OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed += OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed += OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed += OnPlaybackPause_performed;
+        inputActions.Player.PreviousAbility.performed += OnPreviousAbility_performed;
+        inputActions.Player.NextAbility.performed += OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed += OnUseAbility_performed;
     }
 
-    private void UseAbility_performed(InputAction.CallbackContext obj)
-    {
-        OnUseAbilityAction?.Invoke();
-    }
-
-    private void NextAbility_performed(InputAction.CallbackContext obj)
-    {
-        OnNextAbilityAction?.Invoke();
-    }
-
-    private void PreviousAbility_performed(InputAction.CallbackContext obj)
-    {
-        OnPreviousAbilityAction?.Invoke();
-    }
-
-    private void Pause_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnPauseAction?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void RecordStop_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnRecordStopAction?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void PlaybackPause_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnPlaybackPauseAction?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void RecordStart_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnRecordAction?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void PlaybackStop_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnPlaybackStopAction?.Invoke(this, EventArgs.Empty);
-    }
-    private void Jump_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        OnJumpAction?.Invoke(this, EventArgs.Empty);
-    }
+    private void OnJump_performed(InputAction.CallbackContext ctx) => OnJumpAction?.Invoke();
+    private void OnRecordStart_performed(InputAction.CallbackContext ctx) => OnRecordAction?.Invoke();
+    private void OnRecordStop_performed(InputAction.CallbackContext ctx) => OnRecordStopAction?.Invoke();
+    private void OnPlaybackStop_performed(InputAction.CallbackContext ctx) => OnPlaybackStopAction?.Invoke();
+    private void OnPlaybackPause_performed(InputAction.CallbackContext ctx) => OnPlaybackPauseAction?.Invoke();
+    private void OnPreviousAbility_performed(InputAction.CallbackContext ctx) => OnPreviousAbilityAction?.Invoke();
+    private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
+    private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
 
     public Vector2 GetMovementVectorNormalized()
     {
-        Vector2 inputVector = inputAction.Player.Move.ReadValue<Vector2>();
-
-        inputVector = inputVector.normalized;
-
-        return inputVector;
+        return inputActions.Player.Move.ReadValue<Vector2>().normalized;
     }
 
     public Vector2 GetLookVector()
     {
-        return inputAction.Player.Look.ReadValue<Vector2>();
+        return inputActions.Player.Look.ReadValue<Vector2>();
     }
 
     private void OnDestroy()
     {
+        if (inputActions == null) return;
+
+        inputActions.Player.Jump.performed -= OnJump_performed;
+        inputActions.Player.RecordStart.performed -= OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed -= OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed -= OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed -= OnPlaybackPause_performed;
+        inputActions.Player.PreviousAbility.performed -= OnPreviousAbility_performed;
+        inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
+
+        inputActions.Player.Disable();
+        inputActions.Dispose();
+
         OnPauseAction = null;
-
-        if (inputAction != null)
-        {
-            inputAction.Player.Jump.performed -= Jump_performed;
-
-            inputAction.Player.Disable();
-            inputAction.Dispose();
-        }
-
-        OnPauseAction = null;
-        OnJumpAction = null; 
+        OnBindingRebinding = null;
+        OnJumpAction = null;
+        OnRecordAction = null;
+        OnRecordStopAction = null;
+        OnPlaybackStopAction = null;
+        OnPlaybackPauseAction = null;
+        OnPreviousAbilityAction = null;
+        OnNextAbilityAction = null;
+        OnUseAbilityAction = null;
     }
 
     public string GetBindingText(Binding binding)
     {
-        switch (binding)
+        return binding switch
         {
-            default:
-
-            case Binding.MoveUp:
-                return inputAction.Player.Move.bindings[1].ToDisplayString();
-
-            case Binding.MoveDown:
-                return inputAction.Player.Move.bindings[3].ToDisplayString();
-
-            case Binding.MoveLeft:
-                return inputAction.Player.Move.bindings[5].ToDisplayString();
-
-            case Binding.MoveRight:
-                return inputAction.Player.Move.bindings[7].ToDisplayString();
-
-            case Binding.Jump:
-                return inputAction.Player.Jump.bindings[0].ToDisplayString();
-        }
+            Binding.MoveUp => inputActions.Player.Move.bindings[1].ToDisplayString(),
+            Binding.MoveDown => inputActions.Player.Move.bindings[3].ToDisplayString(),
+            Binding.MoveLeft => inputActions.Player.Move.bindings[5].ToDisplayString(),
+            Binding.MoveRight => inputActions.Player.Move.bindings[7].ToDisplayString(),
+            Binding.Jump => inputActions.Player.Jump.bindings[0].ToDisplayString(),
+            _ => string.Empty
+        };
     }
 
-    public void RebindBinding(Binding binding, Action OnComplete = null)
+    public void RebindBinding(Binding binding, Action onComplete = null)
     {
-        inputAction.Player.Disable();
+        inputActions.Player.Disable();
 
-        InputActionRebindingExtensions.RebindingOperation rebindingOperation = null;
-
-        switch (binding)
+        InputActionRebindingExtensions.RebindingOperation rebindOp = binding switch
         {
-            default:
-            case Binding.MoveUp:
-                rebindingOperation = inputAction.Player.Move.PerformInteractiveRebinding(1);
-                break;
-            case Binding.MoveDown:
-                rebindingOperation = inputAction.Player.Move.PerformInteractiveRebinding(3);
-                break;
-            case Binding.MoveLeft:
-                rebindingOperation = inputAction.Player.Move.PerformInteractiveRebinding(5);
-                break;
-            case Binding.MoveRight:
-                rebindingOperation = inputAction.Player.Move.PerformInteractiveRebinding(7);
-                break;
+            Binding.MoveUp => inputActions.Player.Move.PerformInteractiveRebinding(1),
+            Binding.MoveDown => inputActions.Player.Move.PerformInteractiveRebinding(3),
+            Binding.MoveLeft => inputActions.Player.Move.PerformInteractiveRebinding(5),
+            Binding.MoveRight => inputActions.Player.Move.PerformInteractiveRebinding(7),
+            Binding.Jump => inputActions.Player.Jump.PerformInteractiveRebinding(0),
+            _ => null
+        };
 
-            case Binding.Jump:
-                rebindingOperation = inputAction.Player.Jump.PerformInteractiveRebinding(0);
-                break;
-        }
-
-        rebindingOperation?
-            .OnComplete((callback) =>
+        rebindOp?
+            .OnComplete(callback =>
             {
-                inputAction.Player.Enable();
-                OnComplete?.Invoke();
+                inputActions.Player.Enable();
+                onComplete?.Invoke();
                 callback.Dispose();
-
-                PlayerPrefs.SetString(PLAYER_PREFS_BINDINGS, inputAction.SaveBindingOverridesAsJson());
+                PlayerPrefs.SetString(PLAYER_PREFS_BINDINGS, inputActions.SaveBindingOverridesAsJson());
                 PlayerPrefs.Save();
-                OnBindingRebinding?.Invoke(this, EventArgs.Empty);
+                OnBindingRebinding?.Invoke();
             })
-            .OnCancel((callback) =>
+            .OnCancel(callback =>
             {
-                inputAction.Player.Enable();
+                inputActions.Player.Enable();
                 callback.Dispose();
             })
             .Start();
     }
-
 }
