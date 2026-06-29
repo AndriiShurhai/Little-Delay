@@ -8,4 +8,6 @@ public interface ICharacterPhysics
 {
     Transform Transform { get; }
     void ApplyDeflectionForce(Vector3 force);
+
+    void ApplyDash(Vector3 force);
 }

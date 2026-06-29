@@ -7,7 +7,7 @@ using UnityEngine;
 public interface IInputSource
 {
     public event Action OnJumpPressed;
-
+    public event Action OnMobilityAbilityPressed;
     public bool IsPlayback { get; }
     public Vector2 GetMoveInput();
     public Vector3 GetWorldMoveDirection();

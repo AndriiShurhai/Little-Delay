@@ -19,6 +19,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     [Header("Movement Settings")]
     [SerializeField] private float _moveSpeed = 7f;
     [SerializeField] private float _jumpForce = 5f;
+    [SerializeField] private float _dashFriction = 8f;
 
     [Header("Ground Detection")]
     [SerializeField] private float _playerHeight = 2f;
@@ -34,6 +35,8 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private bool _pendingAbilityUse;
     private bool _forcePending;
     private bool _justRecovered;
+
+    private Vector3 _dashVelocity;
 
     private AbilityManager _abilityManager;
 
@@ -57,8 +60,6 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
 
         _startPosition = transform.position;
-
-        GameInput.Instance.OnUseAbilityAction += OnUseAbilityInput;
     }
 
     private void OnDestroy()
@@ -66,11 +67,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         if (_inputSource != null)
         {
             _inputSource.OnJumpPressed -= OnJumpInput;
-        }
-
-        if (GameInput.Instance != null)
-        {
-            GameInput.Instance.OnUseAbilityAction -= OnUseAbilityInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
         }
     }
 
@@ -79,9 +76,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         if (_inputSource != null)
         {
             _inputSource.OnJumpPressed -= OnJumpInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
         }
         _inputSource = inputSource;
         _inputSource.OnJumpPressed += OnJumpInput;
+        _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
 
         if (_inputSource is PlayerInputSource)
         {
@@ -163,10 +162,18 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
         _inputSource.Tick();
 
+        _dashVelocity = Vector3.MoveTowards(_dashVelocity, Vector3.zero, _dashFriction * Time.fixedDeltaTime);
+
         Vector3 moveDirection = _inputSource.GetWorldMoveDirection();
         CurrentMoveDirection = moveDirection;
 
-        _rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
+        _rigidbody.linearVelocity = new Vector3(
+            moveDirection.x * _moveSpeed + _dashVelocity.x,
+            _rigidbody.linearVelocity.y,
+            moveDirection.z * _moveSpeed + _dashVelocity.z
+        );
+
+        //_rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
 
         if (moveDirection != Vector3.zero)
         {
@@ -174,7 +181,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
             _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
         }
 
-        if (!InputSource.IsPlayback && _pendingAbilityUse)
+        if (_pendingAbilityUse)
         {
             _pendingAbilityUse = false;
             Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
@@ -193,6 +200,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
         _rigidbody.linearVelocity = Vector3.zero;
         _rigidbody.AddForce(force, ForceMode.VelocityChange);
+    }
+
+    public void ApplyDash(Vector3 force)
+    {
+        _dashVelocity += force;
     }
 
     private void OnDrawGizmos()

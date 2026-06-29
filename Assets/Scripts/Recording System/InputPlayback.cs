@@ -6,7 +6,7 @@ using UnityEngine;
 public class InputPlayback : MonoBehaviour, IInputSource
 {
     public event Action OnJumpPressed;
-
+    public event Action OnMobilityAbilityPressed;
     public event Action OnPlaybackCompleted;
 
     public enum PlaybackState { Playing, Paused, Stopped }
@@ -116,6 +116,11 @@ public class InputPlayback : MonoBehaviour, IInputSource
         if (currentFrame.jumpPressed)
         {
             OnJumpPressed?.Invoke();
+        }
+
+        if (currentFrame.abilityPressed)
+        {
+            OnMobilityAbilityPressed?.Invoke();
         }
         
         _lastConsumedIndex = _currentFrameIndex;

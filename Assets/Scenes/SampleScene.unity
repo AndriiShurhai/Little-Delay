@@ -590,7 +590,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DashAbility
   _cooldownTime: 1
-  _dashForce: 5
+  _dashForce: 10
 --- !u!114 &440424494
 MonoBehaviour:
   m_ObjectHideFlags: 0

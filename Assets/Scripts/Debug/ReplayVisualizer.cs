@@ -44,7 +44,7 @@ public class ReplayVisualizer : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.C))
+        if (Input.GetKeyDown(KeyCode.M))
         {
             _recordedLine.positionCount = 0;
             _playbackLine.positionCount = 0;

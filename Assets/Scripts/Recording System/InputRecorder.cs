@@ -11,6 +11,7 @@ public class InputRecorder : MonoBehaviour
 
     private bool _isRecording;
     private bool _jumpPressedThisFixedFrame;
+    private bool _mobilityAbilityPressedThisFixedFrame;
 
     private Vector2 _accumulatedLookDelta;
 
@@ -30,6 +31,7 @@ public class InputRecorder : MonoBehaviour
         _cameraTarget = PlayerController.Instance.GetComponentInChildren<CameraTargetController>();
 
         GameInput.Instance.OnJumpAction += HandleJump;
+        GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
     }
 
     private void OnDestroy()
@@ -37,6 +39,7 @@ public class InputRecorder : MonoBehaviour
         if (GameInput.Instance != null)
         {
             GameInput.Instance.OnJumpAction -= HandleJump;
+            GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
         }
     }
 
@@ -45,6 +48,15 @@ public class InputRecorder : MonoBehaviour
         if (_isRecording)
         {
             _jumpPressedThisFixedFrame = true;
+
+        }
+    }
+
+    private void HandleMobilityAbility()
+    {
+        if (_isRecording)
+        {
+            _mobilityAbilityPressedThisFixedFrame = true;
         }
     }
 
@@ -92,10 +104,11 @@ public class InputRecorder : MonoBehaviour
             lookDelta = _accumulatedLookDelta,
             jumpPressed = _jumpPressedThisFixedFrame,
             firePressed = false,
-            abilityPressed = false
+            abilityPressed = _mobilityAbilityPressedThisFixedFrame
         });
 
         _accumulatedLookDelta = Vector2.zero;
         _jumpPressedThisFixedFrame = false;
+        _mobilityAbilityPressedThisFixedFrame = false;
     }
 }

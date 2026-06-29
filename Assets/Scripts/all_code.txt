@@ -1,0 +1,1159 @@
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Abilities\AbilityManager.cs ====================
+
+using UnityEngine;
+
+public class AbilityManager : MonoBehaviour
+{
+    [Header("Loadout Slots")]
+    [SerializeField] private BaseAbility _equippedMobility;
+
+    private void Start()
+    {
+        ICharacterPhysics owner = GetComponentInParent<ICharacterPhysics>();
+
+        if (owner == null)
+        {
+            Debug.LogError($"[AbilityManager] No ICharacterPhysics found on {gameObject.name} or its parents.", this);
+            return;
+        }
+
+        if (_equippedMobility != null)
+            _equippedMobility.Initialize(owner);
+    }
+
+    public void TryUseMobility(Vector3 direction)
+    {
+        _equippedMobility?.Execute(direction);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Abilities\BaseAbility.cs ====================
+
+using UnityEngine;
+
+public abstract class BaseAbility : MonoBehaviour
+{
+    [SerializeField] protected float _cooldownTime = 1f;
+
+    protected float CurrentCooldown { get; private set; }
+    protected ICharacterPhysics Owner { get; private set; }
+
+    
+    public void Initialize(ICharacterPhysics owner)
+    {
+        Owner = owner;
+    }
+
+    public abstract void Execute(Vector3 direction);    
+
+    protected void StartCooldown()
+    {
+        CurrentCooldown = _cooldownTime;
+    }
+
+    protected bool IsReady => CurrentCooldown <= 0f;
+
+    protected virtual void Update()
+    {
+        if (CurrentCooldown > 0f)
+        {
+            CurrentCooldown -= Time.deltaTime;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Abilities\DashAbility.cs ====================
+
+using UnityEngine;
+
+public class DashAbility : BaseAbility
+{
+    [SerializeField] private float _dashForce = 1f;
+
+    public override void Execute(Vector3 direction)
+    {
+        if (!IsReady) return;
+
+        // Flatten so we never dash into the ground or sky.
+        Vector3 flatDirection = new Vector3(direction.x, 0f, direction.z).normalized;
+
+        Owner.ApplyDash(flatDirection * _dashForce);
+
+        StartCooldown();
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Debug\ReplayVisualizer.cs ====================
+
+#if UNITY_EDITOR
+using UnityEngine;
+
+public class ReplayVisualizer : MonoBehaviour
+{
+    private LineRenderer _recordedLine;
+    private LineRenderer _playbackLine;
+
+    private PlayerController _player;
+    private InputRecorder _recorder;
+
+    private bool _wasRecording;
+    private bool _wasPlayingBack;
+
+    // Shared material across all visualizer line instances to avoid material leaks.
+    private static Material lineMaterial;
+
+    private void Start()
+    {
+        _player = PlayerController.Instance;
+        _recorder = Object.FindFirstObjectByType<InputRecorder>();
+
+        _recordedLine = CreateLine("Recorded Path (Blue)", Color.blue, width: 0.1f);
+        _playbackLine = CreateLine("Playback Path (Red)", Color.red, width: 0.2f);
+    }
+
+    private LineRenderer CreateLine(string objectName, Color color, float width)
+    {
+        if (lineMaterial == null)
+            lineMaterial = new Material(Shader.Find("Sprites/Default"));
+
+        var go = new GameObject(objectName);
+        go.transform.SetParent(transform);
+
+        var lr = go.AddComponent<LineRenderer>();
+        lr.startWidth = width;
+        lr.endWidth = width;
+        lr.material = lineMaterial;
+        lr.startColor = color;
+        lr.endColor = color;
+        lr.positionCount = 0;
+        return lr;
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            _recordedLine.positionCount = 0;
+            _playbackLine.positionCount = 0;
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        if (_player == null || _recorder == null) return;
+
+        bool isRecordingNow = _recorder.IsRecording;
+        bool isPlayingBackNow = _player.IsPlayingBack;
+
+        if (isRecordingNow)
+        {
+            if (!_wasRecording) _recordedLine.positionCount = 0;
+            AppendPoint(_recordedLine, _player.transform.position);
+        }
+
+        if (isPlayingBackNow)
+        {
+            if (!_wasPlayingBack) _playbackLine.positionCount = 0;
+            AppendPoint(_playbackLine, _player.transform.position);
+        }
+
+        _wasRecording = isRecordingNow;
+        _wasPlayingBack = isPlayingBackNow;
+    }
+
+    private static void AppendPoint(LineRenderer lr, Vector3 position)
+    {
+        lr.positionCount++;
+        // Offset upward slightly so the line doesn't clip into floor geometry.
+        lr.SetPosition(lr.positionCount - 1, position + Vector3.up * 0.1f);
+    }
+}
+#endif
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Debug\TimeController.cs ====================
+
+#if UNITY_EDITOR
+using UnityEngine;
+
+public class TimeController : MonoBehaviour
+{
+    // The default fixed timestep. Store it on start so it's always in sync
+    // with the Project Settings value rather than a hardcoded 0.02f.
+    private float defaultFixedTimestep;
+
+    private void Start()
+    {
+        defaultFixedTimestep = Time.fixedDeltaTime;
+    }
+
+    private void Update()
+    {
+        if (!Input.GetKeyDown(KeyCode.T)) return;
+
+        bool goingSlowMo = Time.timeScale >= 1f;
+
+        if (goingSlowMo)
+        {
+            Time.timeScale = 0.1f;
+            // Scale fixedDeltaTime to maintain physics determinism at reduced speed.
+            Time.fixedDeltaTime = defaultFixedTimestep * Time.timeScale;
+            Debug.Log("<color=yellow>[DEBUG] Slow Motion: ON</color>");
+        }
+        else
+        {
+            Time.timeScale = 1f;
+            Time.fixedDeltaTime = defaultFixedTimestep;
+            Debug.Log("<color=yellow>[DEBUG] Slow Motion: OFF</color>");
+        }
+    }
+}
+#endif
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\FrameInput.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+
+[System.Serializable]
+public struct FrameInput
+{
+    public Vector2 moveInput;
+
+    public Vector3 worldMoveDirection;
+
+    public Vector2 lookDelta;
+    public bool jumpPressed;
+
+    public bool firePressed;
+    public bool abilityPressed;
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\InputPlayback.cs ====================
+
+using System;
+using Unity.VisualScripting;
+using UnityEngine;
+
+[DefaultExecutionOrder(-10)]
+public class InputPlayback : MonoBehaviour, IInputSource
+{
+    public event Action OnJumpPressed;
+    public event Action OnMobilityAbilityPressed;
+    public event Action OnPlaybackCompleted;
+
+    public enum PlaybackState { Playing, Paused, Stopped }
+    public bool IsPlayback => true;
+    public bool IsPlayingBack => _playbackState == PlaybackState.Playing;
+
+    private Recording _recording;
+    private int _currentFrameIndex;
+    private int _lastConsumedIndex;
+    private Vector2 _pendingLookDelta;
+    private PlaybackState _playbackState = PlaybackState.Stopped;
+
+    public Vector2 GetMoveInput()
+    {
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
+            return Vector2.zero;
+
+        return _recording.Frames[_lastConsumedIndex].moveInput;
+    }
+
+    public Vector3 GetWorldMoveDirection()
+    {
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
+            return Vector3.zero;
+
+        if (PlayerController.Instance.IsDeflected)
+            return Vector3.zero;
+
+        return _recording.Frames[_lastConsumedIndex].worldMoveDirection;
+    }
+
+    public Vector2 GetLookDelta()
+    {
+        if (!IsPlayingBack || _recording == null)
+            return Vector2.zero;
+
+        Vector2 delta = _pendingLookDelta;
+        _pendingLookDelta = Vector2.zero;
+        return delta;
+    }
+
+    public void Tick()
+    {
+        AdvanceTimeline();
+    }
+
+    public void StartPlayback(Recording recording)
+    {
+        _recording = recording;
+        _currentFrameIndex = 0;
+        _lastConsumedIndex = 0;
+        _pendingLookDelta = Vector2.zero;
+
+        Rigidbody rb = PlayerController.Instance.GetComponent<Rigidbody>();
+        rb.position = recording.StartPosition;
+        rb.rotation = recording.StartBodyRotation;
+        rb.linearVelocity = recording.StartVelocity;
+        rb.angularVelocity = recording.StartAngularVelocity;
+
+        PlayerController.Instance
+            .GetComponentInChildren<CameraTargetController>()
+            .SetRotation(recording.StartCameraRotation);
+
+        Physics.SyncTransforms();
+
+        _playbackState = PlaybackState.Playing;
+    }
+
+    public void PausePlayback()
+    {
+        if (_playbackState == PlaybackState.Playing)
+        {
+            _playbackState = PlaybackState.Paused;
+        }
+    }
+
+    public void ResumePlayback()
+    {
+        if (_playbackState == PlaybackState.Paused)
+        {
+            _playbackState = PlaybackState.Playing;
+        }
+    }
+
+    public void StopPlayback()
+    {
+        Debug.Assert(
+            _recording != null && _currentFrameIndex == _recording.Frames.Count,
+            $"[PLAYBACK FATAL] Frame count mismatch! Expected {_recording?.Frames.Count}, stopped at {_currentFrameIndex}.");
+
+        _playbackState = PlaybackState.Stopped;
+    }
+
+    private void AdvanceTimeline()
+    {
+        if (!IsPlayingBack || _recording == null || _currentFrameIndex >= _recording.Frames.Count)
+            return;
+
+
+        Debug.Assert(!PlayerController.Instance.IsDeflected,
+            "[PLAYBACK FATAL] The timeline advanced while the player was in the Deflected state!");
+
+        FrameInput currentFrame = _recording.Frames[_currentFrameIndex];
+
+        _pendingLookDelta += currentFrame.lookDelta;
+
+        if (currentFrame.jumpPressed)
+        {
+            OnJumpPressed?.Invoke();
+        }
+
+        if (currentFrame.abilityPressed)
+        {
+            OnMobilityAbilityPressed?.Invoke();
+        }
+        
+        _lastConsumedIndex = _currentFrameIndex;
+        _currentFrameIndex++;
+
+        if (_currentFrameIndex >= _recording.Frames.Count)
+        {
+            StopPlayback();
+            OnPlaybackCompleted?.Invoke();
+        }
+    }
+
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\InputRecorder.cs ====================
+
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+[DefaultExecutionOrder(10)]
+public class InputRecorder : MonoBehaviour
+{
+    public bool IsRecording => _isRecording;
+
+    private readonly List<FrameInput> _inputFrames = new();
+
+    private bool _isRecording;
+    private bool _jumpPressedThisFixedFrame;
+    private bool _mobilityAbilityPressedThisFixedFrame;
+
+    private Vector2 _accumulatedLookDelta;
+
+    private Vector3 _recordingStartPosition;
+    private Quaternion _recordingStartBodyRotation;
+    private Vector3 _recordingStartCameraRotation;
+    private Vector3 _recordingStartVelocity;
+    private Vector3 _recordingStartAngularVelocity;
+
+    private Rigidbody _playerRb;
+
+    private CameraTargetController _cameraTarget;
+
+    private void Start()
+    {
+        _playerRb = PlayerController.Instance.GetComponent<Rigidbody>();
+        _cameraTarget = PlayerController.Instance.GetComponentInChildren<CameraTargetController>();
+
+        GameInput.Instance.OnJumpAction += HandleJump;
+        GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
+    }
+
+    private void OnDestroy()
+    {
+        if (GameInput.Instance != null)
+        {
+            GameInput.Instance.OnJumpAction -= HandleJump;
+            GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
+        }
+    }
+
+    private void HandleJump()
+    {
+        if (_isRecording)
+        {
+            _jumpPressedThisFixedFrame = true;
+
+        }
+    }
+
+    private void HandleMobilityAbility()
+    {
+        if (_isRecording)
+        {
+            _mobilityAbilityPressedThisFixedFrame = true;
+        }
+    }
+
+    private void Update()
+    {
+        if (!_isRecording) return;
+
+        _accumulatedLookDelta += GameInput.Instance.GetLookVector();
+    }
+
+    public void StartRecording()
+    {
+        _inputFrames.Clear();
+        _accumulatedLookDelta = Vector2.zero;
+        _isRecording = true;
+
+        _recordingStartPosition = PlayerController.Instance.transform.position;
+        _recordingStartBodyRotation = PlayerController.Instance.transform.rotation;
+        _recordingStartCameraRotation = _cameraTarget.GetCurrentRotation();
+        _recordingStartVelocity = _playerRb.linearVelocity;
+        _recordingStartAngularVelocity = _playerRb.angularVelocity;
+    }
+
+    public Recording StopRecording()
+    {
+        _isRecording = false;
+        return new Recording(
+            _inputFrames,
+            _recordingStartPosition,
+            _recordingStartBodyRotation,
+            _recordingStartCameraRotation,
+            _recordingStartVelocity,
+            _recordingStartAngularVelocity
+        );
+    }
+
+    private void FixedUpdate()
+    {
+        if (!_isRecording) return;
+
+        _inputFrames.Add(new FrameInput
+        {
+            moveInput = GameInput.Instance.GetMovementVectorNormalized(),
+            worldMoveDirection = PlayerController.Instance.CurrentMoveDirection,
+            lookDelta = _accumulatedLookDelta,
+            jumpPressed = _jumpPressedThisFixedFrame,
+            firePressed = false,
+            abilityPressed = _mobilityAbilityPressedThisFixedFrame
+        });
+
+        _accumulatedLookDelta = Vector2.zero;
+        _jumpPressedThisFixedFrame = false;
+        _mobilityAbilityPressedThisFixedFrame = false;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\Recording.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+public class Recording
+{
+    public IReadOnlyList<FrameInput> Frames { get; }
+    public Vector3 StartPosition { get; }
+    public Quaternion StartBodyRotation { get; }
+    public Vector3 StartCameraRotation { get; }
+    public Vector3 StartVelocity { get; }
+    public Vector3 StartAngularVelocity { get; }
+
+    public Recording(
+        List<FrameInput> frames,
+        Vector3 startPosition,
+        Quaternion startBodyRotation,
+        Vector3 startCameraRotation,
+        Vector3 startVelocity,
+        Vector3 startAngularVelocity)
+    {
+        Frames = frames.AsReadOnly();
+        StartPosition = startPosition;
+        StartBodyRotation = startBodyRotation;
+        StartCameraRotation = startCameraRotation;
+        StartVelocity = startVelocity;
+        StartAngularVelocity = startAngularVelocity;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\RecordingManager.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+
+public class RecordingManager : MonoBehaviour
+{
+    public static RecordingManager Instance { get; private set; }
+
+    [SerializeField] private InputPlayback _inputPlayback;
+    [SerializeField] private PlayerInputSource _playerInputSource;
+    [SerializeField] private InputRecorder _inputRecorder;
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
+
+    private void Start()
+    {
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+
+        GameInput.Instance.OnRecordAction += OnRecordStart;
+        GameInput.Instance.OnRecordStopAction += OnRecordStop;
+        GameInput.Instance.OnPlaybackStopAction += OnPlaybackStop;
+        GameInput.Instance.OnPlaybackPauseAction += OnPlaybackPause;
+
+        _inputPlayback.OnPlaybackCompleted += OnPlaybackFinished;
+    }
+
+    private void OnDestroy()
+    {
+        if (GameInput.Instance != null)
+        {
+            GameInput.Instance.OnRecordAction -= OnRecordStart;
+            GameInput.Instance.OnRecordStopAction -= OnRecordStop;
+            GameInput.Instance.OnPlaybackStopAction -= OnPlaybackStop;
+            GameInput.Instance.OnPlaybackPauseAction -= OnPlaybackPause;
+        }
+
+        _inputPlayback.OnPlaybackCompleted -= OnPlaybackFinished;
+    }
+
+    private void OnRecordStart()
+    {
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+        _inputRecorder.StartRecording();
+    }
+
+    private void OnRecordStop()
+    {
+        Recording recording = _inputRecorder.StopRecording();
+        _inputPlayback.StartPlayback(recording);
+
+        PlayerController.Instance.SetInputSource(_inputPlayback);
+    }
+
+    private void OnPlaybackStop()
+    {
+        _inputPlayback.StopPlayback();
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+    }
+
+    private void OnPlaybackFinished()
+    {
+        PlayerController.Instance.SetInputSource(_playerInputSource);
+    }
+
+    private void OnPlaybackPause()
+    {
+#if UNITY_EDITOR
+        // Debug: apply a random deflection force to test the physics recovery system.
+        Vector3 randomDirection = new Vector3(
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(0f, 1f),
+            UnityEngine.Random.Range(-1f, 1f)
+        ).normalized;
+
+        PlayerController.Instance.ApplyDeflectionForce(randomDirection * 10f);
+#endif
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\CameraTargetController.cs ====================
+
+using UnityEngine;
+
+public class CameraTargetController : MonoBehaviour
+{
+    [Header("Look Settings")]
+    [SerializeField] private float lookSensitivity = 0.5f;
+    [SerializeField] private float topClamp = -70f;
+    [SerializeField] private float bottomClamp = 70f;
+
+    private float pitch; // Up/Down (X axis)
+    private float yaw;   // Left/Right (Y axis)
+
+
+    public void SetRotation(Vector3 angles)
+    {
+        yaw = angles.y;
+        pitch = angles.x;
+
+        transform.rotation = Quaternion.Euler(angles);
+    }
+    public Vector3 GetCurrentRotation()
+    {
+        return new Vector3(pitch, yaw, 0f);
+    }
+
+    private void Update()
+    {
+        Vector2 lookInput = PlayerController.Instance.InputSource.GetLookDelta();
+
+        yaw += lookInput.x * lookSensitivity;
+        pitch -= lookInput.y * lookSensitivity;
+
+        pitch = Mathf.Clamp(pitch, topClamp, bottomClamp);
+
+        transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\CursorManager.cs ====================
+
+using UnityEngine;
+
+public class CursorManager : MonoBehaviour
+{
+    private void Start()
+    {
+        LockCursor();
+    }
+
+    public void LockCursor()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+
+        Cursor.visible = false;
+    }
+
+    public void UnlockCursor()
+    {
+        Cursor.lockState = CursorLockMode.None;
+
+        Cursor.visible = true;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\GameInput.cs ====================
+
+using System;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class GameInput : MonoBehaviour
+{
+    public static GameInput Instance { get; private set; }
+
+    private const string PLAYER_PREFS_BINDINGS = "InputBindings";
+
+    private InputSystem_Actions inputActions;
+
+    public event Action OnPauseAction;
+    public event Action OnBindingRebinding;
+    public event Action OnJumpAction;
+    public event Action OnRecordAction;
+    public event Action OnRecordStopAction;
+    public event Action OnPlaybackStopAction;
+    public event Action OnPlaybackPauseAction;
+    public event Action OnPreviousAbilityAction;
+    public event Action OnNextAbilityAction;
+    public event Action OnUseAbilityAction;
+
+    public enum Binding
+    {
+        MoveUp,
+        MoveDown,
+        MoveLeft,
+        MoveRight,
+        Jump,
+        Pause,
+        GamepadPause
+    }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+
+        inputActions = new InputSystem_Actions();
+
+        if (PlayerPrefs.HasKey(PLAYER_PREFS_BINDINGS))
+            inputActions.LoadBindingOverridesFromJson(PlayerPrefs.GetString(PLAYER_PREFS_BINDINGS));
+
+        inputActions.Player.Enable();
+
+        inputActions.Player.Jump.performed += OnJump_performed;
+        inputActions.Player.RecordStart.performed += OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed += OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed += OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed += OnPlaybackPause_performed;
+        inputActions.Player.PreviousAbility.performed += OnPreviousAbility_performed;
+        inputActions.Player.NextAbility.performed += OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed += OnUseAbility_performed;
+    }
+
+    private void OnJump_performed(InputAction.CallbackContext ctx) => OnJumpAction?.Invoke();
+    private void OnRecordStart_performed(InputAction.CallbackContext ctx) => OnRecordAction?.Invoke();
+    private void OnRecordStop_performed(InputAction.CallbackContext ctx) => OnRecordStopAction?.Invoke();
+    private void OnPlaybackStop_performed(InputAction.CallbackContext ctx) => OnPlaybackStopAction?.Invoke();
+    private void OnPlaybackPause_performed(InputAction.CallbackContext ctx) => OnPlaybackPauseAction?.Invoke();
+    private void OnPreviousAbility_performed(InputAction.CallbackContext ctx) => OnPreviousAbilityAction?.Invoke();
+    private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
+    private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
+
+    public Vector2 GetMovementVectorNormalized()
+    {
+        return inputActions.Player.Move.ReadValue<Vector2>().normalized;
+    }
+
+    public Vector2 GetLookVector()
+    {
+        return inputActions.Player.Look.ReadValue<Vector2>();
+    }
+
+    private void OnDestroy()
+    {
+        if (inputActions == null) return;
+
+        inputActions.Player.Jump.performed -= OnJump_performed;
+        inputActions.Player.RecordStart.performed -= OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed -= OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed -= OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed -= OnPlaybackPause_performed;
+        inputActions.Player.PreviousAbility.performed -= OnPreviousAbility_performed;
+        inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
+
+        inputActions.Player.Disable();
+        inputActions.Dispose();
+
+        OnPauseAction = null;
+        OnBindingRebinding = null;
+        OnJumpAction = null;
+        OnRecordAction = null;
+        OnRecordStopAction = null;
+        OnPlaybackStopAction = null;
+        OnPlaybackPauseAction = null;
+        OnPreviousAbilityAction = null;
+        OnNextAbilityAction = null;
+        OnUseAbilityAction = null;
+    }
+
+    public string GetBindingText(Binding binding)
+    {
+        return binding switch
+        {
+            Binding.MoveUp => inputActions.Player.Move.bindings[1].ToDisplayString(),
+            Binding.MoveDown => inputActions.Player.Move.bindings[3].ToDisplayString(),
+            Binding.MoveLeft => inputActions.Player.Move.bindings[5].ToDisplayString(),
+            Binding.MoveRight => inputActions.Player.Move.bindings[7].ToDisplayString(),
+            Binding.Jump => inputActions.Player.Jump.bindings[0].ToDisplayString(),
+            _ => string.Empty
+        };
+    }
+
+    public void RebindBinding(Binding binding, Action onComplete = null)
+    {
+        inputActions.Player.Disable();
+
+        InputActionRebindingExtensions.RebindingOperation rebindOp = binding switch
+        {
+            Binding.MoveUp => inputActions.Player.Move.PerformInteractiveRebinding(1),
+            Binding.MoveDown => inputActions.Player.Move.PerformInteractiveRebinding(3),
+            Binding.MoveLeft => inputActions.Player.Move.PerformInteractiveRebinding(5),
+            Binding.MoveRight => inputActions.Player.Move.PerformInteractiveRebinding(7),
+            Binding.Jump => inputActions.Player.Jump.PerformInteractiveRebinding(0),
+            _ => null
+        };
+
+        rebindOp?
+            .OnComplete(callback =>
+            {
+                inputActions.Player.Enable();
+                onComplete?.Invoke();
+                callback.Dispose();
+                PlayerPrefs.SetString(PLAYER_PREFS_BINDINGS, inputActions.SaveBindingOverridesAsJson());
+                PlayerPrefs.Save();
+                OnBindingRebinding?.Invoke();
+            })
+            .OnCancel(callback =>
+            {
+                inputActions.Player.Enable();
+                callback.Dispose();
+            })
+            .Start();
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\ICharacterPhysics.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+
+public interface ICharacterPhysics
+{
+    Transform Transform { get; }
+    void ApplyDeflectionForce(Vector3 force);
+
+    void ApplyDash(Vector3 force);
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\IInputSource.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+
+public interface IInputSource
+{
+    public event Action OnJumpPressed;
+    public event Action OnMobilityAbilityPressed;
+    public bool IsPlayback { get; }
+    public Vector2 GetMoveInput();
+    public Vector3 GetWorldMoveDirection();
+    public Vector2 GetLookDelta();
+    public void Tick();
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\PlayerController.cs ====================
+
+using System;
+using System.Linq.Expressions;
+using Unity.Cinemachine;
+using Unity.VisualScripting;
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class PlayerController : MonoBehaviour, ICharacterPhysics
+{
+    public static PlayerController Instance { get; private set; }
+
+    public bool IsDeflected { get; private set; }
+    public bool IsPlayingBack { get; private set; }
+    public Vector3 CurrentMoveDirection { get; private set; }
+    public Vector3 StartPosition => _startPosition;
+
+    Transform ICharacterPhysics.Transform => transform;
+
+    [Header("Movement Settings")]
+    [SerializeField] private float _moveSpeed = 7f;
+    [SerializeField] private float _jumpForce = 5f;
+    [SerializeField] private float _dashFriction = 8f;
+
+    [Header("Ground Detection")]
+    [SerializeField] private float _playerHeight = 2f;
+    [SerializeField] private LayerMask _groundLayer;
+
+    private Vector3 _startPosition;
+
+    private Rigidbody _rigidbody;
+    private IInputSource _inputSource;
+
+    private bool _isGrounded;
+    private bool _pendingJump;
+    private bool _pendingAbilityUse;
+    private bool _forcePending;
+    private bool _justRecovered;
+
+    private Vector3 _dashVelocity;
+
+    private AbilityManager _abilityManager;
+
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
+
+    private void Start()
+    {
+        _rigidbody = GetComponent<Rigidbody>();
+        _abilityManager = GetComponent<AbilityManager>();
+
+        _rigidbody.freezeRotation = true;
+        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        _startPosition = transform.position;
+    }
+
+    private void OnDestroy()
+    {
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
+        }
+    }
+
+    public void SetInputSource(IInputSource inputSource)
+    {
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
+        }
+        _inputSource = inputSource;
+        _inputSource.OnJumpPressed += OnJumpInput;
+        _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
+
+        if (_inputSource is PlayerInputSource)
+        {
+            IsPlayingBack = false;
+        }
+        else if (_inputSource is InputPlayback)
+        {
+            IsPlayingBack = true;
+        }   
+    }
+
+    public IInputSource InputSource => _inputSource;
+
+    private void OnJumpInput()
+    {
+        _pendingJump = true;
+    }
+
+    private void OnUseAbilityInput()
+    {
+        _pendingAbilityUse = true;
+    }
+
+    private void FixedUpdate()
+    {
+        UpdateGroundState();
+        ResolveDeflectionRecovery();
+        ResolveJump();
+        HandleMovement();
+    }
+
+    private void UpdateGroundState()
+    {
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        _isGrounded = Physics.Raycast(rayStart, Vector3.down, 0.4f, _groundLayer, QueryTriggerInteraction.Ignore);
+        _justRecovered = false;
+    }
+
+    private void ResolveDeflectionRecovery()
+    {
+        if (!IsDeflected) return;
+        if (_forcePending)
+        {
+            _forcePending = false;
+            return;
+        }
+
+        Vector2 horizontalVelocity = new Vector2(_rigidbody.linearVelocity.x, _rigidbody.linearVelocity.z);
+        bool slowedDown = horizontalVelocity.magnitude <= _moveSpeed + 1f;
+        bool notRocketingUp = _rigidbody.linearVelocity.y <= 1f;
+
+        if (_isGrounded && slowedDown && notRocketingUp)
+        {
+            IsDeflected = false;
+            _justRecovered = true;
+            _rigidbody.linearVelocity = new Vector3(0f, _rigidbody.linearVelocity.y, 0f);
+        }
+    }
+
+    private void ResolveJump()
+    {
+        if (!_pendingJump) return;
+        _pendingJump = false;
+
+        if (_isGrounded && !IsDeflected)
+        {
+            _rigidbody.linearVelocity = new Vector3(_rigidbody.linearVelocity.x, 0f, _rigidbody.linearVelocity.z);
+            _rigidbody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
+        }
+    }
+
+    private void HandleMovement()
+    {
+        if (IsDeflected || _justRecovered)
+        {
+            CurrentMoveDirection = Vector3.zero;
+            return; 
+        }
+
+        _inputSource.Tick();
+
+        _dashVelocity = Vector3.MoveTowards(_dashVelocity, Vector3.zero, _dashFriction * Time.fixedDeltaTime);
+
+        Vector3 moveDirection = _inputSource.GetWorldMoveDirection();
+        CurrentMoveDirection = moveDirection;
+
+        _rigidbody.linearVelocity = new Vector3(
+        moveDirection.x * _moveSpeed + _dashVelocity.x,
+        _rigidbody.linearVelocity.y,
+        moveDirection.z * _moveSpeed + _dashVelocity.z
+    );
+
+        _rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
+
+        if (moveDirection != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
+        }
+
+        if (!InputSource.IsPlayback && _pendingAbilityUse)
+        {
+            _pendingAbilityUse = false;
+            Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
+            _abilityManager?.TryUseMobility(abilityDirection);
+        }
+    }
+
+    public void ApplyDeflectionForce(Vector3 force)
+    {
+        Debug.Assert(!_forcePending,
+            "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
+
+        IsDeflected = true;
+        _forcePending = true;
+        _pendingJump = false;
+
+        _rigidbody.linearVelocity = Vector3.zero;
+        _rigidbody.AddForce(force, ForceMode.VelocityChange);
+    }
+
+    public void ApplyDash(Vector3 force)
+    {
+        _dashVelocity += force;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        Gizmos.color = _isGrounded ? Color.green : Color.red;
+        Gizmos.DrawWireSphere(rayStart, 0.1f);
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 0.4f);
+    }
+
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\PlayerInputSource.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+public class PlayerInputSource : MonoBehaviour, IInputSource
+{
+
+    public event Action OnJumpPressed;
+    public event Action OnMobilityAbilityPressed;
+    public bool IsPlayback => false;
+    [SerializeField] private Transform _cameraTarget;
+
+    private void Start()
+    {
+        GameInput.Instance.OnJumpAction += HandleJump;
+        GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
+    }
+
+    private void OnDestroy()
+    {
+        if (GameInput.Instance != null)
+        {
+            GameInput.Instance.OnJumpAction -= HandleJump;
+            GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
+        }
+    }
+
+    private void HandleJump()
+    {
+        OnJumpPressed?.Invoke();
+    }
+
+    private void HandleMobilityAbility()
+    {
+        OnMobilityAbilityPressed?.Invoke();
+    }
+
+    public Vector2 GetMoveInput()
+    {
+        return GameInput.Instance.GetMovementVectorNormalized();
+    }
+
+    public Vector3 GetWorldMoveDirection()
+    {
+        Vector2 input = GameInput.Instance.GetMovementVectorNormalized();
+        if (input == Vector2.zero) return Vector3.zero;
+        
+        Vector3 forward = _cameraTarget.forward;
+        forward.y = 0f;
+        forward.Normalize();
+
+        Vector3 right = _cameraTarget.right;
+        right.y = 0f;
+        right.Normalize();
+
+        return (forward * input.y) + (right * input.x); 
+    }
+
+    public Vector2 GetLookDelta()
+    {
+        return GameInput.Instance.GetLookVector();
+    }
+
+    public void Tick() { }
+}

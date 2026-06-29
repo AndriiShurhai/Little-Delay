@@ -11,7 +11,7 @@ public class DashAbility : BaseAbility
         // Flatten so we never dash into the ground or sky.
         Vector3 flatDirection = new Vector3(direction.x, 0f, direction.z).normalized;
 
-        Owner.ApplyDeflectionForce(flatDirection * _dashForce);
+        Owner.ApplyDash(flatDirection * _dashForce);
 
         StartCooldown();
     }

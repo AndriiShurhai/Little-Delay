@@ -7,12 +7,14 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
 {
 
     public event Action OnJumpPressed;
+    public event Action OnMobilityAbilityPressed;
     public bool IsPlayback => false;
     [SerializeField] private Transform _cameraTarget;
 
     private void Start()
     {
         GameInput.Instance.OnJumpAction += HandleJump;
+        GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
     }
 
     private void OnDestroy()
@@ -20,12 +22,18 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
         if (GameInput.Instance != null)
         {
             GameInput.Instance.OnJumpAction -= HandleJump;
+            GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
         }
     }
 
     private void HandleJump()
     {
         OnJumpPressed?.Invoke();
+    }
+
+    private void HandleMobilityAbility()
+    {
+        OnMobilityAbilityPressed?.Invoke();
     }
 
     public Vector2 GetMoveInput()
