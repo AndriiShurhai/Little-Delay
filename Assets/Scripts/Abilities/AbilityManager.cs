@@ -4,6 +4,7 @@ public class AbilityManager : MonoBehaviour
 {
     [Header("Loadout Slots")]
     [SerializeField] private BaseAbility _equippedMobility;
+    [SerializeField] private BaseAbility _equippedAttack;
 
     private void Start()
     {
@@ -17,10 +18,18 @@ public class AbilityManager : MonoBehaviour
 
         if (_equippedMobility != null)
             _equippedMobility.Initialize(owner);
+
+        if (_equippedAttack != null)
+            _equippedAttack.Initialize(owner);
     }
 
     public void TryUseMobility(Vector3 direction)
     {
         _equippedMobility?.Execute(direction);
+    }
+
+    public void TryUseFire(Vector3 direction)
+    {
+        _equippedAttack?.Execute(direction);
     }
 }

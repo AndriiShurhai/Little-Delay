@@ -7,6 +7,7 @@ public class AbilityManager : MonoBehaviour
 {
     [Header("Loadout Slots")]
     [SerializeField] private BaseAbility _equippedMobility;
+    [SerializeField] private BaseAbility _equippedAttack;
 
     private void Start()
     {
@@ -20,11 +21,19 @@ public class AbilityManager : MonoBehaviour
 
         if (_equippedMobility != null)
             _equippedMobility.Initialize(owner);
+
+        if (_equippedAttack != null)
+            _equippedAttack.Initialize(owner);
     }
 
     public void TryUseMobility(Vector3 direction)
     {
         _equippedMobility?.Execute(direction);
+    }
+
+    public void TryUseFire(Vector3 direction)
+    {
+        _equippedAttack?.Execute(direction);
     }
 }
 
@@ -60,6 +69,46 @@ public abstract class BaseAbility : MonoBehaviour
         {
             CurrentCooldown -= Time.deltaTime;
         }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Abilities\BlastAbility.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+
+public class BlastAbility : BaseAbility
+{
+    [SerializeField] private Projectile _projectilePrefab;
+
+    [SerializeField] private Transform _spawnPoint;
+
+    [SerializeField] private float _projectileSpeed = 20f;
+    [SerializeField] private float _damage = 50f;
+
+
+    public override void Execute(Vector3 direction)
+    {
+        if (!IsReady || _projectilePrefab == null) return;
+
+
+        if (direction == Vector3.zero)
+        {
+            direction = Owner.Transform.forward;
+        }
+
+        Vector3 origin = _spawnPoint != null
+            ? _spawnPoint.position
+            : Owner.Transform.position + Owner.Transform.forward * 0.5f + Vector3.up * 0.5f;
+
+        Projectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
+
+        projectile.Initialize(direction * _projectileSpeed, _damage, Owner.Transform);
+
+        StartCooldown();
     }
 }
 
@@ -210,6 +259,295 @@ public class TimeController : MonoBehaviour
 }
 #endif
 
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Player\HealthComponent.cs ====================
+
+using System;
+using UnityEngine;
+
+public class HealthComponent : MonoBehaviour
+{
+    [SerializeField] private float _maxHealth = 100f;
+
+    /// <summary>Fired when health changes. Args: currentHealth, maxHealth.</summary>
+    public event Action<float, float> OnHealthChanged;
+
+    /// <summary>Fired once when health reaches zero. Subscriber (RoundManager) handles round resolution.</summary>
+    public event Action OnDeath;
+
+    public float CurrentHealth { get; private set; }
+    public float MaxHealth => _maxHealth;
+    public bool IsDead { get; private set; }
+
+    private void Awake()
+    {
+        CurrentHealth = _maxHealth;
+    }
+
+    public void TakeDamage(float amount)
+    {
+        if (IsDead) return;
+
+        CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
+        OnHealthChanged?.Invoke(CurrentHealth, _maxHealth);
+
+        if (CurrentHealth <= 0f)
+        {
+            IsDead = true;
+            OnDeath?.Invoke();
+        }
+    }
+
+    public void Heal(float amount)
+    {
+        if (IsDead) return;
+
+        CurrentHealth = Mathf.Min(_maxHealth, CurrentHealth + amount);
+        OnHealthChanged?.Invoke(CurrentHealth, _maxHealth);
+    }
+
+    /// <summary>Call at the start of each round to restore the fighter to full health.</summary>
+    public void ResetHealth()
+    {
+        IsDead = false;
+        CurrentHealth = _maxHealth;
+        OnHealthChanged?.Invoke(CurrentHealth, _maxHealth);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Player\PlayerController.cs ====================
+
+using System;
+using System.Linq.Expressions;
+using Unity.Cinemachine;
+using Unity.VisualScripting;
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class PlayerController : MonoBehaviour, ICharacterPhysics
+{
+    public static PlayerController Instance { get; private set; }
+
+    public bool IsDeflected { get; private set; }
+    public bool IsPlayingBack { get; private set; }
+    public Vector3 CurrentMoveDirection { get; private set; }
+    public Vector3 StartPosition => _startPosition;
+
+    Transform ICharacterPhysics.Transform => transform;
+
+    [Header("Movement Settings")]
+    [SerializeField] private float _moveSpeed = 7f;
+    [SerializeField] private float _jumpForce = 5f;
+    [SerializeField] private float _dashFriction = 8f;
+
+    [Header("Ground Detection")]
+    [SerializeField] private float _playerHeight = 2f;
+    [SerializeField] private LayerMask _groundLayer;
+
+    private Vector3 _startPosition;
+
+    private Rigidbody _rigidbody;
+    private IInputSource _inputSource;
+
+    private bool _isGrounded;
+    private bool _pendingJump;
+    private bool _pendingAbilityUse;
+    private bool _pendingFireUse;
+    private bool _forcePending;
+    private bool _justRecovered;
+
+    private Vector3 _dashVelocity;
+
+    private AbilityManager _abilityManager;
+
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+    }
+
+    private void Start()
+    {
+        _rigidbody = GetComponent<Rigidbody>();
+        _abilityManager = GetComponent<AbilityManager>();
+
+        _rigidbody.freezeRotation = true;
+        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        _startPosition = transform.position;
+    }
+
+    private void OnDestroy()
+    {
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
+        }
+    }
+
+    public void SetInputSource(IInputSource inputSource)
+    {
+        if (_inputSource != null)
+        {
+            _inputSource.OnJumpPressed -= OnJumpInput;
+            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
+        }
+        _inputSource = inputSource;
+        _inputSource.OnJumpPressed += OnJumpInput;
+        _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
+        _inputSource.OnFirePressed += OnFireInput;
+
+        if (_inputSource is PlayerInputSource)
+        {
+            IsPlayingBack = false;
+        }
+        else if (_inputSource is InputPlayback)
+        {
+            IsPlayingBack = true;
+        }   
+    }
+
+    public IInputSource InputSource => _inputSource;
+
+    private void OnJumpInput()
+    {
+        _pendingJump = true;
+    }
+
+    private void OnUseAbilityInput()
+    {
+        _pendingAbilityUse = true;
+    }
+
+    private void OnFireInput()
+    {
+        _pendingFireUse = true;
+    }
+
+    private void FixedUpdate()
+    {
+        UpdateGroundState();
+        ResolveDeflectionRecovery();
+        ResolveJump();
+        HandleMovement();
+    }
+
+    private void UpdateGroundState()
+    {
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        _isGrounded = Physics.Raycast(rayStart, Vector3.down, 0.4f, _groundLayer, QueryTriggerInteraction.Ignore);
+        _justRecovered = false;
+    }
+
+    private void ResolveDeflectionRecovery()
+    {
+        if (!IsDeflected) return;
+        if (_forcePending)
+        {
+            _forcePending = false;
+            return;
+        }
+
+        Vector2 horizontalVelocity = new Vector2(_rigidbody.linearVelocity.x, _rigidbody.linearVelocity.z);
+        bool slowedDown = horizontalVelocity.magnitude <= _moveSpeed + 1f;
+        bool notRocketingUp = _rigidbody.linearVelocity.y <= 1f;
+
+        if (_isGrounded && slowedDown && notRocketingUp)
+        {
+            IsDeflected = false;
+            _justRecovered = true;
+            _rigidbody.linearVelocity = new Vector3(0f, _rigidbody.linearVelocity.y, 0f);
+        }
+    }
+
+    private void ResolveJump()
+    {
+        if (!_pendingJump) return;
+        _pendingJump = false;
+
+        if (_isGrounded && !IsDeflected)
+        {
+            _rigidbody.linearVelocity = new Vector3(_rigidbody.linearVelocity.x, 0f, _rigidbody.linearVelocity.z);
+            _rigidbody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
+        }
+    }
+
+    private void HandleMovement()
+    {
+        if (IsDeflected || _justRecovered)
+        {
+            CurrentMoveDirection = Vector3.zero;
+            return; 
+        }
+
+        _inputSource.Tick();
+
+        _dashVelocity = Vector3.MoveTowards(_dashVelocity, Vector3.zero, _dashFriction * Time.fixedDeltaTime);
+
+        Vector3 moveDirection = _inputSource.GetWorldMoveDirection();
+        CurrentMoveDirection = moveDirection;
+
+        _rigidbody.linearVelocity = new Vector3(
+            moveDirection.x * _moveSpeed + _dashVelocity.x,
+            _rigidbody.linearVelocity.y,
+            moveDirection.z * _moveSpeed + _dashVelocity.z
+        );
+
+        //_rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
+
+        if (moveDirection != Vector3.zero)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
+        }
+
+        if (_pendingAbilityUse)
+        {
+            _pendingAbilityUse = false;
+            Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
+            _abilityManager?.TryUseMobility(abilityDirection);
+        }
+
+        if (_pendingFireUse)
+        {
+            _pendingFireUse = false;
+            _abilityManager?.TryUseFire(_inputSource.GetAimDirection());
+        }
+    }
+
+    public void ApplyDeflectionForce(Vector3 force)
+    {
+        Debug.Assert(!_forcePending,
+            "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
+
+        IsDeflected = true;
+        _forcePending = true;
+        _pendingJump = false;
+
+        _rigidbody.linearVelocity = Vector3.zero;
+        _rigidbody.AddForce(force, ForceMode.VelocityChange);
+    }
+
+    public void ApplyDash(Vector3 force)
+    {
+        _dashVelocity += force;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
+        Gizmos.color = _isGrounded ? Color.green : Color.red;
+        Gizmos.DrawWireSphere(rayStart, 0.1f);
+        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 0.4f);
+    }
+
+}
+
 ==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Recording System\FrameInput.cs ====================
 
 using System;
@@ -228,6 +566,8 @@ public struct FrameInput
     public Vector2 lookDelta;
     public bool jumpPressed;
 
+    public Vector3 aimDirection;
+
     public bool firePressed;
     public bool abilityPressed;
 }
@@ -241,6 +581,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-10)]
 public class InputPlayback : MonoBehaviour, IInputSource
 {
+    public event Action OnFirePressed;
     public event Action OnJumpPressed;
     public event Action OnMobilityAbilityPressed;
     public event Action OnPlaybackCompleted;
@@ -282,6 +623,13 @@ public class InputPlayback : MonoBehaviour, IInputSource
         Vector2 delta = _pendingLookDelta;
         _pendingLookDelta = Vector2.zero;
         return delta;
+    }
+
+    public Vector3 GetAimDirection()
+    {
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
+            return Vector3.zero;
+        return _recording.Frames[_lastConsumedIndex].aimDirection;
     }
 
     public void Tick()
@@ -359,6 +707,11 @@ public class InputPlayback : MonoBehaviour, IInputSource
             OnMobilityAbilityPressed?.Invoke();
         }
         
+        if (currentFrame.firePressed)
+        {
+            OnFirePressed?.Invoke();
+        }
+
         _lastConsumedIndex = _currentFrameIndex;
         _currentFrameIndex++;
 
@@ -387,6 +740,7 @@ public class InputRecorder : MonoBehaviour
     private bool _isRecording;
     private bool _jumpPressedThisFixedFrame;
     private bool _mobilityAbilityPressedThisFixedFrame;
+    private bool _firePressedThisFixedFrame;
 
     private Vector2 _accumulatedLookDelta;
 
@@ -407,6 +761,7 @@ public class InputRecorder : MonoBehaviour
 
         GameInput.Instance.OnJumpAction += HandleJump;
         GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
+        GameInput.Instance.OnFireAction += HandleFire;
     }
 
     private void OnDestroy()
@@ -415,7 +770,13 @@ public class InputRecorder : MonoBehaviour
         {
             GameInput.Instance.OnJumpAction -= HandleJump;
             GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
+            GameInput.Instance.OnFireAction -= HandleFire;
         }
+    }
+
+    private void HandleFire()
+    {
+        _firePressedThisFixedFrame = true;
     }
 
     private void HandleJump()
@@ -477,13 +838,15 @@ public class InputRecorder : MonoBehaviour
             moveInput = GameInput.Instance.GetMovementVectorNormalized(),
             worldMoveDirection = PlayerController.Instance.CurrentMoveDirection,
             lookDelta = _accumulatedLookDelta,
+            aimDirection = _cameraTarget.transform.forward,
             jumpPressed = _jumpPressedThisFixedFrame,
-            firePressed = false,
+            firePressed = _firePressedThisFixedFrame,
             abilityPressed = _mobilityAbilityPressedThisFixedFrame
         });
 
         _accumulatedLookDelta = Vector2.zero;
         _jumpPressedThisFixedFrame = false;
+        _firePressedThisFixedFrame = false;
         _mobilityAbilityPressedThisFixedFrame = false;
     }
 }
@@ -702,6 +1065,7 @@ public class GameInput : MonoBehaviour
     public event Action OnPreviousAbilityAction;
     public event Action OnNextAbilityAction;
     public event Action OnUseAbilityAction;
+    public event Action OnFireAction;
 
     public enum Binding
     {
@@ -738,6 +1102,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.PreviousAbility.performed += OnPreviousAbility_performed;
         inputActions.Player.NextAbility.performed += OnNextAbility_performed;
         inputActions.Player.UseAbility.performed += OnUseAbility_performed;
+        inputActions.Player.Fire.performed += OnFire_performed;
     }
 
     private void OnJump_performed(InputAction.CallbackContext ctx) => OnJumpAction?.Invoke();
@@ -748,6 +1113,7 @@ public class GameInput : MonoBehaviour
     private void OnPreviousAbility_performed(InputAction.CallbackContext ctx) => OnPreviousAbilityAction?.Invoke();
     private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
     private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
+    private void OnFire_performed(InputAction.CallbackContext ctx) => OnFireAction?.Invoke();
 
     public Vector2 GetMovementVectorNormalized()
     {
@@ -771,7 +1137,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.PreviousAbility.performed -= OnPreviousAbility_performed;
         inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
         inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
-
+        inputActions.Player.Fire.performed -= OnFire_performed; 
         inputActions.Player.Disable();
         inputActions.Dispose();
 
@@ -785,6 +1151,7 @@ public class GameInput : MonoBehaviour
         OnPreviousAbilityAction = null;
         OnNextAbilityAction = null;
         OnUseAbilityAction = null;
+        OnFireAction = null;
     }
 
     public string GetBindingText(Binding binding)
@@ -861,232 +1228,14 @@ public interface IInputSource
 {
     public event Action OnJumpPressed;
     public event Action OnMobilityAbilityPressed;
+    public event Action OnFirePressed;
     public bool IsPlayback { get; }
     public Vector2 GetMoveInput();
     public Vector3 GetWorldMoveDirection();
     public Vector2 GetLookDelta();
+
+    public Vector3 GetAimDirection();
     public void Tick();
-}
-
-==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\PlayerController.cs ====================
-
-using System;
-using System.Linq.Expressions;
-using Unity.Cinemachine;
-using Unity.VisualScripting;
-using UnityEngine;
-
-[RequireComponent(typeof(Rigidbody))]
-public class PlayerController : MonoBehaviour, ICharacterPhysics
-{
-    public static PlayerController Instance { get; private set; }
-
-    public bool IsDeflected { get; private set; }
-    public bool IsPlayingBack { get; private set; }
-    public Vector3 CurrentMoveDirection { get; private set; }
-    public Vector3 StartPosition => _startPosition;
-
-    Transform ICharacterPhysics.Transform => transform;
-
-    [Header("Movement Settings")]
-    [SerializeField] private float _moveSpeed = 7f;
-    [SerializeField] private float _jumpForce = 5f;
-    [SerializeField] private float _dashFriction = 8f;
-
-    [Header("Ground Detection")]
-    [SerializeField] private float _playerHeight = 2f;
-    [SerializeField] private LayerMask _groundLayer;
-
-    private Vector3 _startPosition;
-
-    private Rigidbody _rigidbody;
-    private IInputSource _inputSource;
-
-    private bool _isGrounded;
-    private bool _pendingJump;
-    private bool _pendingAbilityUse;
-    private bool _forcePending;
-    private bool _justRecovered;
-
-    private Vector3 _dashVelocity;
-
-    private AbilityManager _abilityManager;
-
-
-    private void Awake()
-    {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-        Instance = this;
-    }
-
-    private void Start()
-    {
-        _rigidbody = GetComponent<Rigidbody>();
-        _abilityManager = GetComponent<AbilityManager>();
-
-        _rigidbody.freezeRotation = true;
-        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
-
-        _startPosition = transform.position;
-    }
-
-    private void OnDestroy()
-    {
-        if (_inputSource != null)
-        {
-            _inputSource.OnJumpPressed -= OnJumpInput;
-            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
-        }
-    }
-
-    public void SetInputSource(IInputSource inputSource)
-    {
-        if (_inputSource != null)
-        {
-            _inputSource.OnJumpPressed -= OnJumpInput;
-            _inputSource.OnMobilityAbilityPressed -= OnUseAbilityInput;
-        }
-        _inputSource = inputSource;
-        _inputSource.OnJumpPressed += OnJumpInput;
-        _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
-
-        if (_inputSource is PlayerInputSource)
-        {
-            IsPlayingBack = false;
-        }
-        else if (_inputSource is InputPlayback)
-        {
-            IsPlayingBack = true;
-        }   
-    }
-
-    public IInputSource InputSource => _inputSource;
-
-    private void OnJumpInput()
-    {
-        _pendingJump = true;
-    }
-
-    private void OnUseAbilityInput()
-    {
-        _pendingAbilityUse = true;
-    }
-
-    private void FixedUpdate()
-    {
-        UpdateGroundState();
-        ResolveDeflectionRecovery();
-        ResolveJump();
-        HandleMovement();
-    }
-
-    private void UpdateGroundState()
-    {
-        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
-        _isGrounded = Physics.Raycast(rayStart, Vector3.down, 0.4f, _groundLayer, QueryTriggerInteraction.Ignore);
-        _justRecovered = false;
-    }
-
-    private void ResolveDeflectionRecovery()
-    {
-        if (!IsDeflected) return;
-        if (_forcePending)
-        {
-            _forcePending = false;
-            return;
-        }
-
-        Vector2 horizontalVelocity = new Vector2(_rigidbody.linearVelocity.x, _rigidbody.linearVelocity.z);
-        bool slowedDown = horizontalVelocity.magnitude <= _moveSpeed + 1f;
-        bool notRocketingUp = _rigidbody.linearVelocity.y <= 1f;
-
-        if (_isGrounded && slowedDown && notRocketingUp)
-        {
-            IsDeflected = false;
-            _justRecovered = true;
-            _rigidbody.linearVelocity = new Vector3(0f, _rigidbody.linearVelocity.y, 0f);
-        }
-    }
-
-    private void ResolveJump()
-    {
-        if (!_pendingJump) return;
-        _pendingJump = false;
-
-        if (_isGrounded && !IsDeflected)
-        {
-            _rigidbody.linearVelocity = new Vector3(_rigidbody.linearVelocity.x, 0f, _rigidbody.linearVelocity.z);
-            _rigidbody.AddForce(Vector3.up * _jumpForce, ForceMode.Impulse);
-        }
-    }
-
-    private void HandleMovement()
-    {
-        if (IsDeflected || _justRecovered)
-        {
-            CurrentMoveDirection = Vector3.zero;
-            return; 
-        }
-
-        _inputSource.Tick();
-
-        _dashVelocity = Vector3.MoveTowards(_dashVelocity, Vector3.zero, _dashFriction * Time.fixedDeltaTime);
-
-        Vector3 moveDirection = _inputSource.GetWorldMoveDirection();
-        CurrentMoveDirection = moveDirection;
-
-        _rigidbody.linearVelocity = new Vector3(
-        moveDirection.x * _moveSpeed + _dashVelocity.x,
-        _rigidbody.linearVelocity.y,
-        moveDirection.z * _moveSpeed + _dashVelocity.z
-    );
-
-        _rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
-
-        if (moveDirection != Vector3.zero)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
-        }
-
-        if (!InputSource.IsPlayback && _pendingAbilityUse)
-        {
-            _pendingAbilityUse = false;
-            Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
-            _abilityManager?.TryUseMobility(abilityDirection);
-        }
-    }
-
-    public void ApplyDeflectionForce(Vector3 force)
-    {
-        Debug.Assert(!_forcePending,
-            "[PHYSICS FATAL] A new deflection force was applied before the previous one finished pending!");
-
-        IsDeflected = true;
-        _forcePending = true;
-        _pendingJump = false;
-
-        _rigidbody.linearVelocity = Vector3.zero;
-        _rigidbody.AddForce(force, ForceMode.VelocityChange);
-    }
-
-    public void ApplyDash(Vector3 force)
-    {
-        _dashVelocity += force;
-    }
-
-    private void OnDrawGizmos()
-    {
-        Vector3 rayStart = transform.position + Vector3.down * (_playerHeight * 0.4f);
-        Gizmos.color = _isGrounded ? Color.green : Color.red;
-        Gizmos.DrawWireSphere(rayStart, 0.1f);
-        Gizmos.DrawLine(rayStart, rayStart + Vector3.down * 0.4f);
-    }
-
 }
 
 ==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\PlayerInputSource.cs ====================
@@ -1098,7 +1247,7 @@ using UnityEngine;
 
 public class PlayerInputSource : MonoBehaviour, IInputSource
 {
-
+    public event Action OnFirePressed;
     public event Action OnJumpPressed;
     public event Action OnMobilityAbilityPressed;
     public bool IsPlayback => false;
@@ -1106,6 +1255,7 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
 
     private void Start()
     {
+        GameInput.Instance.OnFireAction += HandleFire;
         GameInput.Instance.OnJumpAction += HandleJump;
         GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
     }
@@ -1114,11 +1264,16 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
     {
         if (GameInput.Instance != null)
         {
+            GameInput.Instance.OnFireAction -= HandleFire;
             GameInput.Instance.OnJumpAction -= HandleJump;
             GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
         }
     }
 
+    private void HandleFire()
+    {
+        OnFirePressed?.Invoke();
+    }
     private void HandleJump()
     {
         OnJumpPressed?.Invoke();
@@ -1129,6 +1284,10 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
         OnMobilityAbilityPressed?.Invoke();
     }
 
+    public Vector3 GetAimDirection()
+    {
+        return _cameraTarget.forward;
+    }
     public Vector2 GetMoveInput()
     {
         return GameInput.Instance.GetMovementVectorNormalized();
@@ -1156,4 +1315,53 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
     }
 
     public void Tick() { }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Projectile.cs ====================
+
+using System;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+
+public class Projectile : MonoBehaviour
+{
+    [SerializeField] private float _lifetime = 5f;
+
+    private float _damage;
+    private Transform _ownerRoot;
+    private Rigidbody _rigidbody;
+
+    private void Awake()
+    {
+        _rigidbody = GetComponent<Rigidbody>();
+    }
+
+    public void Initialize(Vector3 velocity, float damage, Transform ownerRoot)
+    {
+        _damage = damage;
+        _ownerRoot = ownerRoot;
+
+        _rigidbody.linearVelocity = velocity;
+
+        Destroy(gameObject, _lifetime);
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (_ownerRoot != null && other.transform.IsChildOf(_ownerRoot))
+            return;
+
+        if (other.TryGetComponent<HealthComponent>(out var health))
+        {
+            health.TakeDamage(_damage);
+        }
+
+        Explode();
+    }
+
+    private void Explode()
+    {
+        Destroy(gameObject);
+    }
 }

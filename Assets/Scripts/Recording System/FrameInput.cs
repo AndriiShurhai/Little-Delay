@@ -14,6 +14,8 @@ public struct FrameInput
     public Vector2 lookDelta;
     public bool jumpPressed;
 
+    public Vector3 aimPoint;
+
     public bool firePressed;
     public bool abilityPressed;
 }

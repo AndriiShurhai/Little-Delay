@@ -20,6 +20,7 @@ public class GameInput : MonoBehaviour
     public event Action OnPreviousAbilityAction;
     public event Action OnNextAbilityAction;
     public event Action OnUseAbilityAction;
+    public event Action OnFireAction;
 
     public enum Binding
     {
@@ -56,6 +57,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.PreviousAbility.performed += OnPreviousAbility_performed;
         inputActions.Player.NextAbility.performed += OnNextAbility_performed;
         inputActions.Player.UseAbility.performed += OnUseAbility_performed;
+        inputActions.Player.Fire.performed += OnFire_performed;
     }
 
     private void OnJump_performed(InputAction.CallbackContext ctx) => OnJumpAction?.Invoke();
@@ -66,6 +68,7 @@ public class GameInput : MonoBehaviour
     private void OnPreviousAbility_performed(InputAction.CallbackContext ctx) => OnPreviousAbilityAction?.Invoke();
     private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
     private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
+    private void OnFire_performed(InputAction.CallbackContext ctx) => OnFireAction?.Invoke();
 
     public Vector2 GetMovementVectorNormalized()
     {
@@ -89,7 +92,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.PreviousAbility.performed -= OnPreviousAbility_performed;
         inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
         inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
-
+        inputActions.Player.Fire.performed -= OnFire_performed; 
         inputActions.Player.Disable();
         inputActions.Dispose();
 
@@ -103,6 +106,7 @@ public class GameInput : MonoBehaviour
         OnPreviousAbilityAction = null;
         OnNextAbilityAction = null;
         OnUseAbilityAction = null;
+        OnFireAction = null;
     }
 
     public string GetBindingText(Binding binding)

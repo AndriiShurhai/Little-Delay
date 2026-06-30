@@ -5,6 +5,7 @@ using UnityEngine;
 [DefaultExecutionOrder(-10)]
 public class InputPlayback : MonoBehaviour, IInputSource
 {
+    public event Action OnFirePressed;
     public event Action OnJumpPressed;
     public event Action OnMobilityAbilityPressed;
     public event Action OnPlaybackCompleted;
@@ -46,6 +47,13 @@ public class InputPlayback : MonoBehaviour, IInputSource
         Vector2 delta = _pendingLookDelta;
         _pendingLookDelta = Vector2.zero;
         return delta;
+    }
+
+    public Vector3 GetAimPoint()
+    {
+        if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
+            return Vector3.zero;
+        return _recording.Frames[_lastConsumedIndex].aimPoint;
     }
 
     public void Tick()
@@ -123,6 +131,11 @@ public class InputPlayback : MonoBehaviour, IInputSource
             OnMobilityAbilityPressed?.Invoke();
         }
         
+        if (currentFrame.firePressed)
+        {
+            OnFirePressed?.Invoke();
+        }
+
         _lastConsumedIndex = _currentFrameIndex;
         _currentFrameIndex++;
 

@@ -33,6 +33,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private bool _isGrounded;
     private bool _pendingJump;
     private bool _pendingAbilityUse;
+    private bool _pendingFireUse;
     private bool _forcePending;
     private bool _justRecovered;
 
@@ -81,6 +82,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         _inputSource = inputSource;
         _inputSource.OnJumpPressed += OnJumpInput;
         _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
+        _inputSource.OnFirePressed += OnFireInput;
 
         if (_inputSource is PlayerInputSource)
         {
@@ -102,6 +104,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private void OnUseAbilityInput()
     {
         _pendingAbilityUse = true;
+    }
+
+    private void OnFireInput()
+    {
+        _pendingFireUse = true;
     }
 
     private void FixedUpdate()
@@ -186,6 +193,12 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
             _pendingAbilityUse = false;
             Vector3 abilityDirection = moveDirection == Vector3.zero ? transform.forward : moveDirection;
             _abilityManager?.TryUseMobility(abilityDirection);
+        }
+
+        if (_pendingFireUse)
+        {
+            _pendingFireUse = false;
+            _abilityManager?.TryUseFire(_inputSource.GetAimPoint());
         }
     }
 

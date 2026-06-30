@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class PlayerInputSource : MonoBehaviour, IInputSource
 {
-
+    public event Action OnFirePressed;
     public event Action OnJumpPressed;
     public event Action OnMobilityAbilityPressed;
     public bool IsPlayback => false;
@@ -13,6 +13,7 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
 
     private void Start()
     {
+        GameInput.Instance.OnFireAction += HandleFire;
         GameInput.Instance.OnJumpAction += HandleJump;
         GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
     }
@@ -21,11 +22,16 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
     {
         if (GameInput.Instance != null)
         {
+            GameInput.Instance.OnFireAction -= HandleFire;
             GameInput.Instance.OnJumpAction -= HandleJump;
             GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
         }
     }
 
+    private void HandleFire()
+    {
+        OnFirePressed?.Invoke();
+    }
     private void HandleJump()
     {
         OnJumpPressed?.Invoke();
@@ -36,6 +42,20 @@ public class PlayerInputSource : MonoBehaviour, IInputSource
         OnMobilityAbilityPressed?.Invoke();
     }
 
+    public Vector3 GetAimPoint()
+    {
+        // The center of the screen/canvas is always (0.5, 0.5) in viewport space.
+        Ray ray = Camera.main.ViewportPointToRay(new Vector2(0.5f, 0.5f));
+
+        // Raycast into the world to find what the crosshair is overlapping
+        if (Physics.Raycast(ray, out RaycastHit hit, 999f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            return hit.point; // Shoot at what we hit
+        }
+
+        // If looking at the sky (no hit), pick a point far away along the ray
+        return ray.GetPoint(100f);
+    }
     public Vector2 GetMoveInput()
     {
         return GameInput.Instance.GetMovementVectorNormalized();
