@@ -7,8 +7,6 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour, ICharacterPhysics
 {
-    public static PlayerController Instance { get; private set; }
-
     public bool IsDeflected { get; private set; }
     public bool IsPlayingBack { get; private set; }
     public Vector3 CurrentMoveDirection { get; private set; }
@@ -36,6 +34,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private bool _pendingFireUse;
     private bool _forcePending;
     private bool _justRecovered;
+    private bool _inactiveState = false;
 
     private Vector3 _dashVelocity;
 
@@ -44,18 +43,12 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-        Instance = this;
+        _rigidbody = GetComponent<Rigidbody>();
+        _abilityManager = GetComponent<AbilityManager>();
     }
 
     private void Start()
     {
-        _rigidbody = GetComponent<Rigidbody>();
-        _abilityManager = GetComponent<AbilityManager>();
 
         _rigidbody.freezeRotation = true;
         _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
@@ -72,6 +65,27 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         }
     }
 
+    public void Teleport(Vector3 position, Quaternion rotation)
+    {
+        _rigidbody.interpolation = RigidbodyInterpolation.None;
+        _rigidbody.freezeRotation = false;
+
+        transform.position = position;
+        transform.rotation = rotation;
+
+        _rigidbody.position = position;
+        GetComponentInChildren<CameraTargetController>().SetRotation(rotation.eulerAngles);
+
+        _rigidbody.linearVelocity = Vector3.zero;
+        _rigidbody.angularVelocity = Vector3.zero;
+        _dashVelocity = Vector3.zero;
+
+        Physics.SyncTransforms();
+
+        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+        _rigidbody.freezeRotation = true;
+    }
+
     public void SetInputSource(IInputSource inputSource)
     {
         if (_inputSource != null)
@@ -84,6 +98,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         _inputSource.OnMobilityAbilityPressed += OnUseAbilityInput;
         _inputSource.OnFirePressed += OnFireInput;
 
+        _pendingFireUse = false;
+        _pendingJump = false;
+        _pendingAbilityUse = false;
+        _forcePending = false;
+
         if (_inputSource is PlayerInputSource)
         {
             IsPlayingBack = false;
@@ -92,6 +111,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         {
             IsPlayingBack = true;
         }   
+    }
+
+    public void SetInactiveState(bool inactive)
+    {
+        _inactiveState = inactive;
     }
 
     public IInputSource InputSource => _inputSource;
@@ -161,6 +185,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
     private void HandleMovement()
     {
+        if (_inactiveState) return;
         if (IsDeflected || _justRecovered)
         {
             CurrentMoveDirection = Vector3.zero;

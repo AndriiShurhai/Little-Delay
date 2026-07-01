@@ -25,7 +25,7 @@ public class CameraTargetController : MonoBehaviour
 
     private void Update()
     {
-        Vector2 lookInput = PlayerController.Instance.InputSource.GetLookDelta();
+        Vector2 lookInput = BattleManager.Instance.LivePlayer.InputSource.GetLookDelta();
 
         yaw += lookInput.x * lookSensitivity;
         pitch -= lookInput.y * lookSensitivity;

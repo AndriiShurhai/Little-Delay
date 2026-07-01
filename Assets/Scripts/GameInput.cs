@@ -17,7 +17,7 @@ public class GameInput : MonoBehaviour
     public event Action OnRecordStopAction;
     public event Action OnPlaybackStopAction;
     public event Action OnPlaybackPauseAction;
-    public event Action OnPreviousAbilityAction;
+    public event Action OnRoundStartAction;
     public event Action OnNextAbilityAction;
     public event Action OnUseAbilityAction;
     public event Action OnFireAction;
@@ -54,7 +54,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.RecordFinish.performed += OnRecordStop_performed;
         inputActions.Player.PlaybackStop.performed += OnPlaybackStop_performed;
         inputActions.Player.PlaybackPause.performed += OnPlaybackPause_performed;
-        inputActions.Player.PreviousAbility.performed += OnPreviousAbility_performed;
+        inputActions.Player.StartRound.performed += OnStartRound_performed;
         inputActions.Player.NextAbility.performed += OnNextAbility_performed;
         inputActions.Player.UseAbility.performed += OnUseAbility_performed;
         inputActions.Player.Fire.performed += OnFire_performed;
@@ -65,7 +65,7 @@ public class GameInput : MonoBehaviour
     private void OnRecordStop_performed(InputAction.CallbackContext ctx) => OnRecordStopAction?.Invoke();
     private void OnPlaybackStop_performed(InputAction.CallbackContext ctx) => OnPlaybackStopAction?.Invoke();
     private void OnPlaybackPause_performed(InputAction.CallbackContext ctx) => OnPlaybackPauseAction?.Invoke();
-    private void OnPreviousAbility_performed(InputAction.CallbackContext ctx) => OnPreviousAbilityAction?.Invoke();
+    private void OnStartRound_performed(InputAction.CallbackContext ctx) => OnRoundStartAction?.Invoke();
     private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
     private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
     private void OnFire_performed(InputAction.CallbackContext ctx) => OnFireAction?.Invoke();
@@ -89,7 +89,7 @@ public class GameInput : MonoBehaviour
         inputActions.Player.RecordFinish.performed -= OnRecordStop_performed;
         inputActions.Player.PlaybackStop.performed -= OnPlaybackStop_performed;
         inputActions.Player.PlaybackPause.performed -= OnPlaybackPause_performed;
-        inputActions.Player.PreviousAbility.performed -= OnPreviousAbility_performed;
+        inputActions.Player.StartRound.performed -= OnStartRound_performed;
         inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
         inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
         inputActions.Player.Fire.performed -= OnFire_performed; 
@@ -103,7 +103,7 @@ public class GameInput : MonoBehaviour
         OnRecordStopAction = null;
         OnPlaybackStopAction = null;
         OnPlaybackPauseAction = null;
-        OnPreviousAbilityAction = null;
+        OnRoundStartAction = null;
         OnNextAbilityAction = null;
         OnUseAbilityAction = null;
         OnFireAction = null;

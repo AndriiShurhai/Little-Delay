@@ -210,7 +210,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""initialStateCheck"": false
                 },
                 {
-                    ""name"": ""PreviousAbility"",
+                    ""name"": ""StartRound"",
                     ""type"": ""Button"",
                     ""id"": ""c49219ed-19d9-4f5e-bbb3-e8f82e6168e0"",
                     ""expectedControlType"": """",
@@ -683,7 +683,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
-                    ""action"": ""PreviousAbility"",
+                    ""action"": ""StartRound"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 },
@@ -1317,7 +1317,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_Player_RecordFinish = m_Player.FindAction("RecordFinish", throwIfNotFound: true);
         m_Player_PlaybackStop = m_Player.FindAction("PlaybackStop", throwIfNotFound: true);
         m_Player_PlaybackPause = m_Player.FindAction("PlaybackPause", throwIfNotFound: true);
-        m_Player_PreviousAbility = m_Player.FindAction("PreviousAbility", throwIfNotFound: true);
+        m_Player_StartRound = m_Player.FindAction("StartRound", throwIfNotFound: true);
         m_Player_NextAbility = m_Player.FindAction("NextAbility", throwIfNotFound: true);
         m_Player_UseAbility = m_Player.FindAction("UseAbility", throwIfNotFound: true);
         m_Player_Fire = m_Player.FindAction("Fire", throwIfNotFound: true);
@@ -1427,7 +1427,7 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_RecordFinish;
     private readonly InputAction m_Player_PlaybackStop;
     private readonly InputAction m_Player_PlaybackPause;
-    private readonly InputAction m_Player_PreviousAbility;
+    private readonly InputAction m_Player_StartRound;
     private readonly InputAction m_Player_NextAbility;
     private readonly InputAction m_Player_UseAbility;
     private readonly InputAction m_Player_Fire;
@@ -1495,9 +1495,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// </summary>
         public InputAction @PlaybackPause => m_Wrapper.m_Player_PlaybackPause;
         /// <summary>
-        /// Provides access to the underlying input action "Player/PreviousAbility".
+        /// Provides access to the underlying input action "Player/StartRound".
         /// </summary>
-        public InputAction @PreviousAbility => m_Wrapper.m_Player_PreviousAbility;
+        public InputAction @StartRound => m_Wrapper.m_Player_StartRound;
         /// <summary>
         /// Provides access to the underlying input action "Player/NextAbility".
         /// </summary>
@@ -1575,9 +1575,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackPause.started += instance.OnPlaybackPause;
             @PlaybackPause.performed += instance.OnPlaybackPause;
             @PlaybackPause.canceled += instance.OnPlaybackPause;
-            @PreviousAbility.started += instance.OnPreviousAbility;
-            @PreviousAbility.performed += instance.OnPreviousAbility;
-            @PreviousAbility.canceled += instance.OnPreviousAbility;
+            @StartRound.started += instance.OnStartRound;
+            @StartRound.performed += instance.OnStartRound;
+            @StartRound.canceled += instance.OnStartRound;
             @NextAbility.started += instance.OnNextAbility;
             @NextAbility.performed += instance.OnNextAbility;
             @NextAbility.canceled += instance.OnNextAbility;
@@ -1637,9 +1637,9 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @PlaybackPause.started -= instance.OnPlaybackPause;
             @PlaybackPause.performed -= instance.OnPlaybackPause;
             @PlaybackPause.canceled -= instance.OnPlaybackPause;
-            @PreviousAbility.started -= instance.OnPreviousAbility;
-            @PreviousAbility.performed -= instance.OnPreviousAbility;
-            @PreviousAbility.canceled -= instance.OnPreviousAbility;
+            @StartRound.started -= instance.OnStartRound;
+            @StartRound.performed -= instance.OnStartRound;
+            @StartRound.canceled -= instance.OnStartRound;
             @NextAbility.started -= instance.OnNextAbility;
             @NextAbility.performed -= instance.OnNextAbility;
             @NextAbility.canceled -= instance.OnNextAbility;
@@ -2041,12 +2041,12 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnPlaybackPause(InputAction.CallbackContext context);
         /// <summary>
-        /// Method invoked when associated input action "PreviousAbility" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// Method invoked when associated input action "StartRound" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>
         /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
-        void OnPreviousAbility(InputAction.CallbackContext context);
+        void OnStartRound(InputAction.CallbackContext context);
         /// <summary>
         /// Method invoked when associated input action "NextAbility" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>

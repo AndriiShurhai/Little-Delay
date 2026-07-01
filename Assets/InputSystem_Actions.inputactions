@@ -124,7 +124,7 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "PreviousAbility",
+                    "name": "StartRound",
                     "type": "Button",
                     "id": "c49219ed-19d9-4f5e-bbb3-e8f82e6168e0",
                     "expectedControlType": "",
@@ -597,7 +597,7 @@
                     "interactions": "",
                     "processors": "",
                     "groups": "",
-                    "action": "PreviousAbility",
+                    "action": "StartRound",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

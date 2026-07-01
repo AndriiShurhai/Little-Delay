@@ -14,12 +14,22 @@ public class InputPlayback : MonoBehaviour, IInputSource
     public bool IsPlayback => true;
     public bool IsPlayingBack => _playbackState == PlaybackState.Playing;
 
+
+    private PlayerController _playerController;
     private Recording _recording;
     private int _currentFrameIndex;
     private int _lastConsumedIndex;
     private Vector2 _pendingLookDelta;
     private PlaybackState _playbackState = PlaybackState.Stopped;
 
+    private void Awake()
+    {
+        _playerController = GetComponent<PlayerController>();
+    }
+
+    private void Start()
+    {
+    }
     public Vector2 GetMoveInput()
     {
         if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
@@ -27,13 +37,12 @@ public class InputPlayback : MonoBehaviour, IInputSource
 
         return _recording.Frames[_lastConsumedIndex].moveInput;
     }
-
     public Vector3 GetWorldMoveDirection()
     {
         if (!IsPlayingBack || _recording == null || _lastConsumedIndex >= _recording.Frames.Count)
             return Vector3.zero;
 
-        if (PlayerController.Instance.IsDeflected)
+        if (_playerController.IsDeflected)
             return Vector3.zero;
 
         return _recording.Frames[_lastConsumedIndex].worldMoveDirection;
@@ -68,15 +77,17 @@ public class InputPlayback : MonoBehaviour, IInputSource
         _lastConsumedIndex = 0;
         _pendingLookDelta = Vector2.zero;
 
-        Rigidbody rb = PlayerController.Instance.GetComponent<Rigidbody>();
-        rb.position = recording.StartPosition;
-        rb.rotation = recording.StartBodyRotation;
+        _playerController.Teleport(recording.StartPosition, recording.StartBodyRotation);
+
+        Rigidbody rb = _playerController.gameObject.GetComponent<Rigidbody>();
         rb.linearVelocity = recording.StartVelocity;
         rb.angularVelocity = recording.StartAngularVelocity;
 
-        PlayerController.Instance
-            .GetComponentInChildren<CameraTargetController>()
-            .SetRotation(recording.StartCameraRotation);
+        var cameraTarget = _playerController.GetComponentInChildren<CameraTargetController>();
+        if (cameraTarget != null)
+        {
+            cameraTarget.SetRotation(recording.StartCameraRotation);
+        }
 
         Physics.SyncTransforms();
 
@@ -114,7 +125,7 @@ public class InputPlayback : MonoBehaviour, IInputSource
             return;
 
 
-        Debug.Assert(!PlayerController.Instance.IsDeflected,
+        Debug.Assert(!_playerController.IsDeflected,
             "[PLAYBACK FATAL] The timeline advanced while the player was in the Deflected state!");
 
         FrameInput currentFrame = _recording.Frames[_currentFrameIndex];

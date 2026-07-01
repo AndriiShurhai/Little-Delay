@@ -28,8 +28,8 @@ public class InputRecorder : MonoBehaviour
 
     private void Start()
     {
-        _playerRb = PlayerController.Instance.GetComponent<Rigidbody>();
-        _cameraTarget = PlayerController.Instance.GetComponentInChildren<CameraTargetController>();
+        _playerRb = BattleManager.Instance.LivePlayer.GetComponent<Rigidbody>();
+        _cameraTarget = BattleManager.Instance.LivePlayer.GetComponentInChildren<CameraTargetController>();
 
         GameInput.Instance.OnJumpAction += HandleJump;
         GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
@@ -79,10 +79,15 @@ public class InputRecorder : MonoBehaviour
     {
         _inputFrames.Clear();
         _accumulatedLookDelta = Vector2.zero;
+
+        _jumpPressedThisFixedFrame = false;
+        _firePressedThisFixedFrame = false;
+        _mobilityAbilityPressedThisFixedFrame = false;
+
         _isRecording = true;
 
-        _recordingStartPosition = PlayerController.Instance.transform.position;
-        _recordingStartBodyRotation = PlayerController.Instance.transform.rotation;
+        _recordingStartPosition = _playerRb.position;
+        _recordingStartBodyRotation = _playerRb.rotation;
         _recordingStartCameraRotation = _cameraTarget.GetCurrentRotation();
         _recordingStartVelocity = _playerRb.linearVelocity;
         _recordingStartAngularVelocity = _playerRb.angularVelocity;
@@ -92,7 +97,7 @@ public class InputRecorder : MonoBehaviour
     {
         _isRecording = false;
         return new Recording(
-            _inputFrames,
+            new List<FrameInput>(_inputFrames),
             _recordingStartPosition,
             _recordingStartBodyRotation,
             _recordingStartCameraRotation,
@@ -108,9 +113,9 @@ public class InputRecorder : MonoBehaviour
         _inputFrames.Add(new FrameInput
         {
             moveInput = GameInput.Instance.GetMovementVectorNormalized(),
-            worldMoveDirection = PlayerController.Instance.CurrentMoveDirection,
+            worldMoveDirection = BattleManager.Instance.LivePlayer.CurrentMoveDirection,
             lookDelta = _accumulatedLookDelta,
-            aimPoint = PlayerController.Instance.InputSource.GetAimPoint(),
+            aimPoint = BattleManager.Instance.LivePlayer.InputSource.GetAimPoint(),
             jumpPressed = _jumpPressedThisFixedFrame,
             firePressed = _firePressedThisFixedFrame,
             abilityPressed = _mobilityAbilityPressedThisFixedFrame

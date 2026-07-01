@@ -17,6 +17,8 @@ GameObject:
   - component: {fileID: 5927020847114095410}
   - component: {fileID: 7071497556843295656}
   - component: {fileID: 7254663894902696495}
+  - component: {fileID: 1358774959942104056}
+  - component: {fileID: 7432659532667993252}
   m_Layer: 0
   m_Name: Unit
   m_TagString: Untagged
@@ -207,11 +209,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2b54468b3508c214ca39d8bf17c8fffd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlastAbility
-  _cooldownTime: 1
+  _cooldownTime: 0.4
   _projectilePrefab: {fileID: 3419097370358318785, guid: 160029f46c9aa544cbd91ed89d4c0902, type: 3}
   _spawnPoint: {fileID: 6820081664309379068}
-  _projectileSpeed: 20
+  _projectileSpeed: 35
   _damage: 50
+--- !u!114 &1358774959942104056
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3681035340044026995}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aae84681264643946a4a780e62f69420, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HealthComponent
+  _maxHealth: 100
+--- !u!114 &7432659532667993252
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3681035340044026995}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac998801f9dfcc040a49c6b723e3eded, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InputPlayback
 --- !u!1 &6685058777432189011
 GameObject:
   m_ObjectHideFlags: 0

@@ -24,52 +24,52 @@ public class RecordingManager : MonoBehaviour
 
     private void Start()
     {
-        PlayerController.Instance.SetInputSource(_playerInputSource);
+        BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
 
-        GameInput.Instance.OnRecordAction += OnRecordStart;
-        GameInput.Instance.OnRecordStopAction += OnRecordStop;
-        GameInput.Instance.OnPlaybackStopAction += OnPlaybackStop;
-        GameInput.Instance.OnPlaybackPauseAction += OnPlaybackPause;
+        //GameInput.Instance.OnRecordAction += OnRecordStart;
+        //GameInput.Instance.OnRecordStopAction += OnRecordStop;
+        //GameInput.Instance.OnPlaybackStopAction += OnPlaybackStop;
+        //GameInput.Instance.OnPlaybackPauseAction += OnPlaybackPause;
 
-        _inputPlayback.OnPlaybackCompleted += OnPlaybackFinished;
+        //_inputPlayback.OnPlaybackCompleted += OnPlaybackFinished;
     }
 
     private void OnDestroy()
     {
-        if (GameInput.Instance != null)
-        {
-            GameInput.Instance.OnRecordAction -= OnRecordStart;
-            GameInput.Instance.OnRecordStopAction -= OnRecordStop;
-            GameInput.Instance.OnPlaybackStopAction -= OnPlaybackStop;
-            GameInput.Instance.OnPlaybackPauseAction -= OnPlaybackPause;
-        }
+        //if (GameInput.Instance != null)
+        //{
+        //    GameInput.Instance.OnRecordAction -= OnRecordStart;
+        //    GameInput.Instance.OnRecordStopAction -= OnRecordStop;
+        //    GameInput.Instance.OnPlaybackStopAction -= OnPlaybackStop;
+        //    GameInput.Instance.OnPlaybackPauseAction -= OnPlaybackPause;
+        //}
 
-        _inputPlayback.OnPlaybackCompleted -= OnPlaybackFinished;
+        //_inputPlayback.OnPlaybackCompleted -= OnPlaybackFinished;
     }
 
     private void OnRecordStart()
     {
-        PlayerController.Instance.SetInputSource(_playerInputSource);
+        BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
         _inputRecorder.StartRecording();
     }
 
     private void OnRecordStop()
     {
         Recording recording = _inputRecorder.StopRecording();
-        _inputPlayback.StartPlayback(recording);
+        //_inputPlayback.StartPlayback(recording);
 
-        PlayerController.Instance.SetInputSource(_inputPlayback);
+        //BattleManager.Instance.LivePlayer.SetInputSource(_inputPlayback);
     }
 
     private void OnPlaybackStop()
     {
         _inputPlayback.StopPlayback();
-        PlayerController.Instance.SetInputSource(_playerInputSource);
+        BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
     }
 
     private void OnPlaybackFinished()
     {
-        PlayerController.Instance.SetInputSource(_playerInputSource);
+        BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
     }
 
     private void OnPlaybackPause()
@@ -82,7 +82,7 @@ public class RecordingManager : MonoBehaviour
             UnityEngine.Random.Range(-1f, 1f)
         ).normalized;
 
-        PlayerController.Instance.ApplyDeflectionForce(randomDirection * 10f);
+        BattleManager.Instance.LivePlayer.ApplyDeflectionForce(randomDirection * 10f);
 #endif
     }
 }

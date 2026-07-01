@@ -11,6 +11,8 @@ public class Projectile : MonoBehaviour
     private Transform _ownerRoot;
     private Rigidbody _rigidbody;
 
+    private float force = 10f;
+
     private void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
@@ -33,7 +35,10 @@ public class Projectile : MonoBehaviour
 
         if (other.TryGetComponent<HealthComponent>(out var health))
         {
+            Debug.Log("Projectile hit: " + other.name);
             health.TakeDamage(_damage);
+            Vector3 randomForce = new Vector3(UnityEngine.Random.Range(-force, force), UnityEngine.Random.Range(-force, force), UnityEngine.Random.Range(-force, force));
+            other.GetComponent<PlayerController>()?.ApplyDeflectionForce(randomForce);
         }
 
         Explode();

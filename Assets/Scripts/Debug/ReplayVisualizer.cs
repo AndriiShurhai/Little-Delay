@@ -17,7 +17,7 @@ public class ReplayVisualizer : MonoBehaviour
 
     private void Start()
     {
-        _player = PlayerController.Instance;
+        _player = BattleManager.Instance.LivePlayer;
         _recorder = Object.FindFirstObjectByType<InputRecorder>();
 
         _recordedLine = CreateLine("Recorded Path (Blue)", Color.blue, width: 0.1f);
