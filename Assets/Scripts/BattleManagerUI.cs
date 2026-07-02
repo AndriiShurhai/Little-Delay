@@ -12,7 +12,6 @@ public class BattleUIManager : MonoBehaviour
 
     private void Start()
     {
-        // Subscribe to the BattleManager events
         if (BattleManager.Instance != null)
         {
             BattleManager.Instance.OnCountdownTick.AddListener(UpdateCountdown);
@@ -21,7 +20,6 @@ public class BattleUIManager : MonoBehaviour
             BattleManager.Instance.OnBattlePhaseStarted.AddListener(ShowBattlePhase);
         }
         
-        // Clear UI on start so it's empty during the Idle state
         ClearCenterDisplay();
         _timerDisplay.text = "";
     }

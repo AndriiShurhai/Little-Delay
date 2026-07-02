@@ -66,6 +66,7 @@ GameObject:
   - component: {fileID: 4831351222839447140}
   - component: {fileID: -8573606948956437389}
   - component: {fileID: -3157883398228476}
+  - component: {fileID: 2809983113080857501}
   m_Layer: 7
   m_Name: Ghost
   m_TagString: Untagged
@@ -286,6 +287,18 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac998801f9dfcc040a49c6b723e3eded, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InputPlayback
+--- !u!114 &2809983113080857501
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1712242727714722855}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ebcba166c585094fa140cca1c3512d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GhostLifecycle
 --- !u!1 &8829253943677254811
 GameObject:
   m_ObjectHideFlags: 0

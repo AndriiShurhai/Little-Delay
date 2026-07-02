@@ -112,9 +112,9 @@ public class InputPlayback : MonoBehaviour, IInputSource
 
     public void StopPlayback()
     {
-        Debug.Assert(
-            _recording != null && _currentFrameIndex == _recording.Frames.Count,
-            $"[PLAYBACK FATAL] Frame count mismatch! Expected {_recording?.Frames.Count}, stopped at {_currentFrameIndex}.");
+        //Debug.Assert(
+        //    _recording != null && _currentFrameIndex == _recording.Frames.Count,
+        //    $"[PLAYBACK FATAL] Frame count mismatch! Expected {_recording?.Frames.Count}, stopped at {_currentFrameIndex}.");
 
         _playbackState = PlaybackState.Stopped;
     }

@@ -1,7 +1,10 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 
 public class GhostLifecycle : MonoBehaviour
 {
+    public event Action<GameObject> OnGhostDied;
+    
     private HealthComponent _health;
     private InputPlayback _playback;
     private PlayerController _controller;
@@ -32,8 +35,8 @@ public class GhostLifecycle : MonoBehaviour
         if (_collider != null) _collider.enabled = false;
 
         Debug.Log("<color=red>A Ghost has been killed and its timeline severed.</color>");
-
-        // 4. Trigger ragdoll or destruction
-        // Destroy(gameObject, 2f); 
+        
+        OnGhostDied?.Invoke(gameObject);
+        Destroy(gameObject, 2f);
     }
 }
