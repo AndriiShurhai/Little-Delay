@@ -1,54 +1,63 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
+using Unity;
 using UnityEngine.Events;
+using System.Runtime.CompilerServices;
 
-public class BattleManager : MonoBehaviour 
+public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance { get; private set; }
+    public enum BattleState { Idle, Countdown, Recording, PreBattleCountdown, BattlePhase}
 
-    public enum BattleState { Idle, Countdown, Recording, PreBattleCountdown, BattlePhase }
     public BattleState CurrentState { get; private set; } = BattleState.Idle;
 
     [Header("Dependencies")]
     [SerializeField] private PlayerController _liveController;
     [SerializeField] private InputRecorder _inputRecorder;
-    [SerializeField] private GameObject _ghostPrefab;
-    
+    [SerializeField] private FighterSpawner _fighterSpawner;
+    [SerializeField] private RoundManager _roundManager;
+    [SerializeField] private ArenaController _arenaController;
+
     [Header("Spawn Points")]
     [SerializeField] private Transform _spawnPoint;
     [SerializeField] private Transform _spawnPointSecond;
 
-    [Header("Phase Timings")]
-    [SerializeField] private float _countdownDuration = 3f;
-    [SerializeField] private float _recordingDuration = 10f;
-    [SerializeField] private float _battleCountdownDuration = 3f;
+    [Header("Phase Timing")]
+    [SerializeField] private readonly float _countdownDuration = 3f;
+    [SerializeField] private readonly float _recordingDuration = 10f;
+    [SerializeField] private readonly float _battleCountdownDuration = 3f;
 
     [Header("Cameras")]
     [Tooltip("The static overview camera for the battle phase")]
     [SerializeField] private GameObject _arenaCamera;
+    [SerializeField] private GameObject _playerCamera;
 
     [Header("UI Feedback Events")]
-    public UnityEvent<int> OnCountdownTick;       // Fires every second during countdown (3, 2, 1)
-    public UnityEvent<float> OnRecordingTick;     // Fires every frame during recording with remaining time
-    public UnityEvent OnRecordingFinished;        // Fires when the time limit hits 0
-    public UnityEvent OnBattlePhaseStarted;       // Fires when ghosts spawn and fight
+    public UnityEvent<int> OnCountdownTick;
+    public UnityEvent<float> OnRecordingTick;
+    public UnityEvent OnRecordingFinished;
+    public UnityEvent OnBattlePhaseStarted;
+    public UnityEvent<int> OnRoundContinues;
+    public UnityEvent<int> OnFighterWon;
+    public UnityEvent OnMatchDraw;
 
     public PlayerController LivePlayer => _liveController;
 
-    private List<Recording> _pastRecordings = new();
-    private List<GameObject> _activeGhosts = new();
+    private readonly List<Recording> _pastRecordings = new();
+    private readonly List<Fighter> _fighters = new();
 
     private int _recordingTurn = 1;
     private float _stateTimer;
     private int _lastCountdownSecond;
-    private int _currentRound = 1;
+
 
     private void Awake()
     {
         if (Instance != null && Instance != this)
         {
-            Destroy(gameObject);
+            Destroy(this.gameObject);
             return;
         }
         Instance = this;
@@ -57,14 +66,24 @@ public class BattleManager : MonoBehaviour
     private void Start()
     {
         GameInput.Instance.OnRoundStartAction += InitializeNextTurn;
+
+        _liveController.SetInputSource(FindAnyObjectByType<PlayerInputSource>());
+        _fighterSpawner.OnGhostCreated += _roundManager.RegisterFighter;
+        _roundManager.OnMatchWon += HandleMatchWon;
+        _roundManager.OnMatchDraw += HandleMatchDraw;
+        _roundManager.OnRoundContinues += HandleRoundContinues;
     }
-    
+
     private void OnDestroy()
     {
         if (GameInput.Instance != null)
         {
             GameInput.Instance.OnRoundStartAction -= InitializeNextTurn;
         }
+        _fighterSpawner.OnGhostCreated -= _roundManager.RegisterFighter;
+        _roundManager.OnMatchWon -= HandleMatchWon;
+        _roundManager.OnMatchDraw -= HandleMatchDraw;
+        _roundManager.OnRoundContinues -= HandleRoundContinues;
     }
 
     private void Update()
@@ -76,24 +95,28 @@ public class BattleManager : MonoBehaviour
     {
         if (CurrentState == BattleState.Countdown)
         {
+            Debug.Log($"Countdown Timer: {_stateTimer}");
             _stateTimer -= Time.deltaTime;
-            
+
             int currentSecond = Mathf.CeilToInt(_stateTimer);
+
             if (currentSecond != _lastCountdownSecond)
             {
+                Debug.Log($"Countdown Tick: {currentSecond}");
                 _lastCountdownSecond = currentSecond;
-                OnCountdownTick?.Invoke(currentSecond); 
+                OnCountdownTick?.Invoke(currentSecond);
             }
 
             if (_stateTimer <= 0f)
             {
+                Debug.Log("Countdown Finished");
                 StartRecordingPhase();
             }
         }
         else if (CurrentState == BattleState.Recording)
         {
             _stateTimer -= Time.deltaTime;
-            OnRecordingTick?.Invoke(_stateTimer); 
+            OnRecordingTick?.Invoke(_stateTimer);
 
             if (_stateTimer <= 0f)
             {
@@ -119,28 +142,30 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-
     private void InitializeNextTurn()
     {
-        if (CurrentState == BattleState.Countdown || CurrentState == BattleState.Recording) 
-            return; 
-
-        if (_arenaCamera != null) _arenaCamera.SetActive(false);
+        if (CurrentState == BattleState.Countdown || CurrentState == BattleState.Recording)
+            return;
+        
+        Debug.Log("Initializing next turn: " + _recordingTurn);
 
         if (_recordingTurn == 1)
         {
             _liveController.Teleport(_spawnPoint.position, _spawnPoint.rotation);
         }
+
         else if (_recordingTurn == 2)
         {
             _liveController.Teleport(_spawnPointSecond.position, _spawnPointSecond.rotation);
         }
+
         else
         {
-            return; 
+            return;
         }
 
         _liveController.SetInactiveState(true);
+        _playerCamera.SetActive(true);
 
         CurrentState = BattleState.Countdown;
         _stateTimer = _countdownDuration;
@@ -151,9 +176,8 @@ public class BattleManager : MonoBehaviour
     {
         CurrentState = BattleState.Recording;
         _stateTimer = _recordingDuration;
-        _liveController.SetInactiveState(false); 
+        _liveController.SetInactiveState(false);
 
-        
         _liveController.SetInputSource(FindFirstObjectByType<PlayerInputSource>());
         _inputRecorder.StartRecording();
     }
@@ -162,17 +186,16 @@ public class BattleManager : MonoBehaviour
     {
         Recording recording = _inputRecorder.StopRecording();
         _pastRecordings.Add(recording);
-        
+
         CurrentState = BattleState.Idle;
         OnRecordingFinished?.Invoke();
 
-        
         _liveController.SetInactiveState(true);
 
         if (_recordingTurn == 1)
         {
             _recordingTurn++;
-            InitializeNextTurn(); 
+            InitializeNextTurn();
         }
         else if (_recordingTurn == 2)
         {
@@ -184,48 +207,32 @@ public class BattleManager : MonoBehaviour
     private void PrepareBattlePhase()
     {
         _liveController.gameObject.SetActive(false);
+        _playerCamera.SetActive(false);
 
-        if (_currentRound == 1)
+        bool isFirstRoundOfMatch = _fighters.Count == 0;
+
+        if (isFirstRoundOfMatch)
         {
-            foreach (var pastRecording in _pastRecordings)
+            Transform[] spawnPoints = { _spawnPoint, _spawnPointSecond };
+
+            for (int i = 0; i < _pastRecordings.Count; i++)
             {
-                GameObject ghost = Instantiate(_ghostPrefab, pastRecording.StartPosition, pastRecording.StartBodyRotation);
-
-                InputPlayback ghostPlayback = ghost.GetComponent<InputPlayback>();
-                PlayerController ghostController = ghost.GetComponent<PlayerController>();
-
-                ghostController.SetInputSource(ghostPlayback);
-                ghostPlayback.StartPlayback(pastRecording);
-
-                ghostPlayback.OnPlaybackCompleted += OnGhostPlaybackComplete;
-                ghost.GetComponent<GhostLifecycle>().OnGhostDied += OnGhostDied;
-
-                ghostPlayback.PausePlayback();
-
-                _activeGhosts.Add(ghost);
+                var fighter = new Fighter(i, spawnPoints[i]) { Recording = _pastRecordings[i] };
+                _fighterSpawner.SpawnGhost(fighter);
+                _fighters.Add(fighter);
             }
         }
 
         else
         {
-            for (int i = 0; i < _activeGhosts.Count; i++)
+            for (int i = 0; i < _fighters.Count; i++)
             {
-                GameObject ghost = _activeGhosts[i];
-                ghost.SetActive(true);
-
-                InputPlayback ghostPlayback = ghost.GetComponent<InputPlayback>();
-                PlayerController ghostController = ghost.GetComponent<PlayerController>();
-
-                ghostController.Teleport(_pastRecordings[i].StartPosition, _pastRecordings[i].StartBodyRotation);
-
-                ghostController.SetInputSource(ghostPlayback);
-                ghostPlayback.StartPlayback(_pastRecordings[i]);
-
-                ghostPlayback.PausePlayback();
-
+                _fighters[i].Recording = _pastRecordings[i];
+                _fighterSpawner.RespawnGhost(_fighters[i]);
             }
         }
 
+        _roundManager.BeginRound();
 
         CurrentState = BattleState.PreBattleCountdown;
         _stateTimer = _battleCountdownDuration;
@@ -237,70 +244,19 @@ public class BattleManager : MonoBehaviour
         CurrentState = BattleState.BattlePhase;
         OnBattlePhaseStarted?.Invoke();
 
-        _liveController.gameObject.SetActive(false);
-
-        if(_arenaCamera != null) _arenaCamera.SetActive(true);
-
-        foreach (var ghost in _activeGhosts)
-        {
-            if (ghost != null)
-            {
-                ghost.GetComponent<InputPlayback>().ResumePlayback();
-            }
-        }
+        _fighterSpawner.ResumeALL(_fighters);
     }
 
-    private void OnGhostDied(GameObject ghost)
+    private void HandleRoundContinues(int nextRound) 
     {
-        _activeGhosts.Remove(ghost);
-        _pastRecordings.Clear();
-
-        foreach (var remainingGhost in _activeGhosts)
+        foreach (Fighter fighter in _fighters)
         {
-            if (remainingGhost != null)
-            {
-                Destroy(remainingGhost);
-            }
+            fighter.SpawnPoint.position = fighter.GhostObject.transform.position;
+            fighter.SpawnPoint.rotation = fighter.GhostObject.transform.rotation;
+            fighter.GhostObject.SetActive(false);
         }
 
-        _currentRound = 1;
-        CurrentState = BattleState.Idle;
-        _liveController.gameObject.SetActive(true);
-    }
-    private void OnGhostPlaybackComplete()
-    {
-        bool allGhostsCompleted = true;
-        foreach (var ghost in _activeGhosts)
-        {
-            if (ghost != null && ghost.GetComponent<InputPlayback>().IsPlayingBack)
-            {
-                allGhostsCompleted = false;
-                break;
-            }
-        }
-        if (allGhostsCompleted)
-        {
-            HandleAllGhostsCompleted();
-            _currentRound++;
-        }
-    }
-
-    private void HandleAllGhostsCompleted()
-    {
-        _spawnPoint.position = _activeGhosts[0].transform.position;
-        _spawnPoint.rotation = _activeGhosts[0].transform.rotation;
-
-        _spawnPointSecond.position = _activeGhosts[1].transform.position;
-        _spawnPointSecond.rotation = _activeGhosts[1].transform.rotation;
-
-        foreach (var ghost in _activeGhosts)
-        {
-            if (ghost != null)
-            {
-                ghost.SetActive(false);
-            }
-        }
-
+        _arenaController?.ShrinkForRound(nextRound);
 
         _pastRecordings.Clear();
         _recordingTurn = 1;
@@ -308,7 +264,39 @@ public class BattleManager : MonoBehaviour
 
         _liveController.gameObject.SetActive(true);
 
+        OnRoundContinues?.Invoke(nextRound);
+
         InitializeNextTurn();
     }
 
+    private void HandleMatchWon(Fighter winner)
+    {
+        OnFighterWon?.Invoke(winner.ID);
+        ResetForNextMatch();
+    }
+
+    private void HandleMatchDraw()
+    {
+        OnMatchDraw?.Invoke();
+        ResetForNextMatch();
+    }
+
+    private void ResetForNextMatch()
+    {
+        _roundManager.ClearForNewMatch();
+        _pastRecordings.Clear();
+        _recordingTurn = 1;
+        CurrentState = BattleState.Idle;
+
+        _arenaController?.ResetArena();
+
+        _liveController.gameObject.SetActive(true);
+
+        foreach (var fighter in _fighters)
+        {
+            if (fighter != null) Destroy(fighter.GhostObject);
+        }
+
+        _fighters.Clear();
+    }
 }

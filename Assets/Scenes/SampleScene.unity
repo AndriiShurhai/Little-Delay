@@ -1540,7 +1540,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1629880480}
-  - component: {fileID: 1629880479}
+  - component: {fileID: 1629880484}
+  - component: {fileID: 1629880483}
+  - component: {fileID: 1629880482}
+  - component: {fileID: 1629880481}
   m_Layer: 0
   m_Name: BattleManager
   m_TagString: Untagged
@@ -1548,39 +1551,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1629880479
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1629880478}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1053b4c52e446554cb3803fa2e8ca248, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BattleManager
-  _liveController: {fileID: 456418019379659628}
-  _inputRecorder: {fileID: 61151839}
-  _ghostPrefab: {fileID: 1712242727714722855, guid: 2be0f390c623fe740b645f15551463b9, type: 3}
-  _spawnPoint: {fileID: 456418019379659624}
-  _spawnPointSecond: {fileID: 1461049845}
-  _countdownDuration: 3
-  _recordingDuration: 10
-  _battleCountdownDuration: 3
-  _arenaCamera: {fileID: 0}
-  OnCountdownTick:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRecordingTick:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRecordingFinished:
-    m_PersistentCalls:
-      m_Calls: []
-  OnBattlePhaseStarted:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!4 &1629880480
 Transform:
   m_ObjectHideFlags: 0
@@ -1596,6 +1566,94 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1629880481
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1629880478}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 284bfa1be7040844f9d73839c30dc4de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ArenaController
+  _safeZone: {fileID: 0}
+  _initialScale: {x: 30, y: 10, z: 30}
+  _shrinkPerRound: 4
+  _minSize: 8
+  _shrinkDuration: 2
+  _outOfBoundsDamagePerSecond: 15
+  _fighterLayer:
+    serializedVersion: 2
+    m_Bits: 0
+--- !u!114 &1629880482
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1629880478}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a375ca7a54ac174eb6c30fd01695670, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RoundManager
+--- !u!114 &1629880483
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1629880478}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11d33a482f7f2a84fba897963fb98a89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FighterSpawner
+  _ghostPrefab: {fileID: 1712242727714722855, guid: 2be0f390c623fe740b645f15551463b9, type: 3}
+--- !u!114 &1629880484
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1629880478}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f09a4cb2ea8923b48b59e72cf3a8d890, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BattleManager
+  _liveController: {fileID: 456418019379659628}
+  _inputRecorder: {fileID: 61151839}
+  _fighterSpawner: {fileID: 1629880483}
+  _roundManager: {fileID: 1629880482}
+  _arenaController: {fileID: 1629880481}
+  _spawnPoint: {fileID: 456418019379659624}
+  _spawnPointSecond: {fileID: 1461049845}
+  _arenaCamera: {fileID: 1476861557}
+  _playerCamera: {fileID: 1879819366}
+  OnCountdownTick:
+    m_PersistentCalls:
+      m_Calls: []
+  OnRecordingTick:
+    m_PersistentCalls:
+      m_Calls: []
+  OnRecordingFinished:
+    m_PersistentCalls:
+      m_Calls: []
+  OnBattlePhaseStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  OnRoundContinues:
+    m_PersistentCalls:
+      m_Calls: []
+  OnFighterWon:
+    m_PersistentCalls:
+      m_Calls: []
+  OnMatchDraw:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1657803843
 GameObject:
   m_ObjectHideFlags: 0
