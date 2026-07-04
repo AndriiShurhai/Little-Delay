@@ -33,6 +33,15 @@ public class Projectile : MonoBehaviour
         if (_ownerRoot != null && other.transform.IsChildOf(_ownerRoot))
             return;
 
+        if (other.TryGetComponent<PlayerController>(out var player))
+        {
+            if (player.IsInvincible)
+            {
+                Debug.Log("Player is invincible right now");
+                return;
+            }
+        }
+
         if (other.TryGetComponent<HealthComponent>(out var health))
         {
             Debug.Log("Projectile hit: " + other.name);

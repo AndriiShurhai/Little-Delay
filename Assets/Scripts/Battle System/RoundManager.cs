@@ -13,6 +13,7 @@ public class RoundManager : MonoBehaviour
     private readonly List<Fighter> _fighters = new();
 
     private int _currentRound = 1;
+    private int _maxRounds = 3;
     private int _pendingPlaybackCompletions;
     private bool _deathPending;
     private bool _roundResolved = true;
@@ -81,6 +82,12 @@ public class RoundManager : MonoBehaviour
         if (_pendingPlaybackCompletions >= _fighters.Count)
         {
             _roundResolved = true;
+            
+            if (_currentRound >= _maxRounds)
+            {
+                OnMatchDraw?.Invoke();
+                return;
+            }
             _currentRound++;
             OnRoundContinues?.Invoke(_currentRound);
         }

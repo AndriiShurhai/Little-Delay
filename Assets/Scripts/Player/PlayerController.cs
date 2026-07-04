@@ -9,6 +9,8 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 {
     public bool IsDeflected { get; private set; }
     public bool IsPlayingBack { get; private set; }
+    public bool IsInactiveState => _inactiveState;
+    public bool IsInvincible => _isInvincible;
     public Vector3 CurrentMoveDirection { get; private set; }
     public Vector3 StartPosition => _startPosition;
 
@@ -35,6 +37,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private bool _forcePending;
     private bool _justRecovered;
     private bool _inactiveState = false;
+    private bool _isInvincible = false;
 
     private Vector3 _dashVelocity;
 
@@ -84,6 +87,11 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
         _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
         _rigidbody.freezeRotation = true;
+    }
+
+    public void SetInvincible(bool invincible)
+    {
+        _isInvincible = invincible;
     }
 
     public void SetInputSource(IInputSource inputSource)

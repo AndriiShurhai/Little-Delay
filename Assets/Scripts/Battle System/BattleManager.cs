@@ -43,6 +43,9 @@ public class BattleManager : MonoBehaviour
     public UnityEvent<int> OnFighterWon;
     public UnityEvent OnMatchDraw;
 
+    public event Action<Fighter> OnFighterSpawned;
+    public event Action OnMatchStarted;
+
     public PlayerController LivePlayer => _liveController;
 
     private readonly List<Recording> _pastRecordings = new();
@@ -66,9 +69,10 @@ public class BattleManager : MonoBehaviour
     private void Start()
     {
         GameInput.Instance.OnRoundStartAction += InitializeNextTurn;
+        GameInput.Instance.OnRoundStartAction += () => OnMatchStarted?.Invoke();
 
         _liveController.SetInputSource(FindAnyObjectByType<PlayerInputSource>());
-        _fighterSpawner.OnGhostCreated += _roundManager.RegisterFighter;
+        _fighterSpawner.OnGhostCreated += HandleFighterSpawned;
         _roundManager.OnMatchWon += HandleMatchWon;
         _roundManager.OnMatchDraw += HandleMatchDraw;
         _roundManager.OnRoundContinues += HandleRoundContinues;
@@ -79,8 +83,9 @@ public class BattleManager : MonoBehaviour
         if (GameInput.Instance != null)
         {
             GameInput.Instance.OnRoundStartAction -= InitializeNextTurn;
+            GameInput.Instance.OnRoundStartAction -= () => OnMatchStarted?.Invoke();
         }
-        _fighterSpawner.OnGhostCreated -= _roundManager.RegisterFighter;
+        _fighterSpawner.OnGhostCreated -= HandleFighterSpawned;
         _roundManager.OnMatchWon -= HandleMatchWon;
         _roundManager.OnMatchDraw -= HandleMatchDraw;
         _roundManager.OnRoundContinues -= HandleRoundContinues;
@@ -95,21 +100,18 @@ public class BattleManager : MonoBehaviour
     {
         if (CurrentState == BattleState.Countdown)
         {
-            Debug.Log($"Countdown Timer: {_stateTimer}");
             _stateTimer -= Time.deltaTime;
 
             int currentSecond = Mathf.CeilToInt(_stateTimer);
 
             if (currentSecond != _lastCountdownSecond)
             {
-                Debug.Log($"Countdown Tick: {currentSecond}");
                 _lastCountdownSecond = currentSecond;
                 OnCountdownTick?.Invoke(currentSecond);
             }
 
             if (_stateTimer <= 0f)
             {
-                Debug.Log("Countdown Finished");
                 StartRecordingPhase();
             }
         }
@@ -204,6 +206,12 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    private void HandleFighterSpawned(Fighter fighter)
+    {
+        _roundManager.RegisterFighter(fighter);
+        OnFighterSpawned?.Invoke(fighter);
+    }
+
     private void PrepareBattlePhase()
     {
         _liveController.gameObject.SetActive(false);
@@ -219,6 +227,7 @@ public class BattleManager : MonoBehaviour
             {
                 var fighter = new Fighter(i, spawnPoints[i]) { Recording = _pastRecordings[i] };
                 _fighterSpawner.SpawnGhost(fighter);
+                fighter.GhostObject.GetComponent<PlayerController>().SetInvincible(true);
                 _fighters.Add(fighter);
             }
         }
@@ -229,6 +238,7 @@ public class BattleManager : MonoBehaviour
             {
                 _fighters[i].Recording = _pastRecordings[i];
                 _fighterSpawner.RespawnGhost(_fighters[i]);
+                _fighters[i].GhostObject.GetComponent<PlayerController>().SetInvincible(true);
             }
         }
 
@@ -244,6 +254,10 @@ public class BattleManager : MonoBehaviour
         CurrentState = BattleState.BattlePhase;
         OnBattlePhaseStarted?.Invoke();
 
+        foreach (var fighter in _fighters)
+        {
+            fighter.GhostObject.GetComponent<PlayerController>().SetInvincible(false);
+        }
         _fighterSpawner.ResumeALL(_fighters);
     }
 
