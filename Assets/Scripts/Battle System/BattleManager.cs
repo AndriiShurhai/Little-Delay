@@ -13,9 +13,19 @@ public class BattleManager : MonoBehaviour
 
     public BattleState CurrentState { get; private set; } = BattleState.Idle;
 
-    [Header("Dependencies")]
+    [Header("Player")]
     [SerializeField] private PlayerController _liveController;
-    [SerializeField] private InputRecorder _inputRecorder;
+    [SerializeField] private InputRecorder _playerRecorder;
+
+
+    [Header("AI Opponent")]
+    [SerializeField] private PlayerController _botController;
+    [SerializeField] private AIInputSource _botInputSource;
+    [SerializeField] private InputRecorder _botRecorder;
+
+    [SerializeField] private RevealSystem _revealSystem;
+    
+    [Header("Dependencies")]
     [SerializeField] private FighterSpawner _fighterSpawner;
     [SerializeField] private RoundManager _roundManager;
     [SerializeField] private ArenaController _arenaController;
@@ -72,10 +82,16 @@ public class BattleManager : MonoBehaviour
         GameInput.Instance.OnRoundStartAction += () => OnMatchStarted?.Invoke();
 
         _liveController.SetInputSource(FindAnyObjectByType<PlayerInputSource>());
+        _botController.SetInputSource(_botInputSource);
         _fighterSpawner.OnGhostCreated += HandleFighterSpawned;
         _roundManager.OnMatchWon += HandleMatchWon;
         _roundManager.OnMatchDraw += HandleMatchDraw;
         _roundManager.OnRoundContinues += HandleRoundContinues;
+
+        if (_revealSystem != null)
+        {
+            _revealSystem.OnEnemyPositionRevealed += HandleEnemyPositionRevealed;
+        }
     }
 
     private void OnDestroy()
@@ -89,6 +105,12 @@ public class BattleManager : MonoBehaviour
         _roundManager.OnMatchWon -= HandleMatchWon;
         _roundManager.OnMatchDraw -= HandleMatchDraw;
         _roundManager.OnRoundContinues -= HandleRoundContinues;
+
+        if (_revealSystem != null)
+        {
+            _revealSystem.OnEnemyPositionRevealed -= HandleEnemyPositionRevealed;
+        }
+
     }
 
     private void Update()
@@ -151,22 +173,13 @@ public class BattleManager : MonoBehaviour
         
         Debug.Log("Initializing next turn: " + _recordingTurn);
 
-        if (_recordingTurn == 1)
-        {
-            _liveController.Teleport(_spawnPoint.position, _spawnPoint.rotation);
-        }
-
-        else if (_recordingTurn == 2)
-        {
-            _liveController.Teleport(_spawnPointSecond.position, _spawnPointSecond.rotation);
-        }
-
-        else
-        {
-            return;
-        }
+        _liveController.Teleport(_spawnPoint.position, _spawnPoint.rotation);
+        _botController.Teleport(_spawnPointSecond.position, _spawnPointSecond.rotation);
 
         _liveController.SetInactiveState(true);
+        _botController.SetInactiveState(true);
+
+        _botInputSource.ResetKnowledge();
         _playerCamera.SetActive(true);
 
         CurrentState = BattleState.Countdown;
@@ -178,32 +191,40 @@ public class BattleManager : MonoBehaviour
     {
         CurrentState = BattleState.Recording;
         _stateTimer = _recordingDuration;
+
         _liveController.SetInactiveState(false);
+        _botController.SetInactiveState(false);
 
         _liveController.SetInputSource(FindFirstObjectByType<PlayerInputSource>());
-        _inputRecorder.StartRecording();
+        _playerRecorder.BeginRecording(_liveController, _liveController.InputSource);
+
+        _botController.SetInputSource(_botInputSource);
+        _botRecorder.BeginRecording(_botController, _botInputSource);
+
+        if (_revealSystem != null)
+        {
+            _revealSystem.BeginReveals(_liveController.transform, _botInputSource, _recordingDuration);
+        }
     }
 
     private void EndRecordingPhase()
     {
-        Recording recording = _inputRecorder.StopRecording();
-        _pastRecordings.Add(recording);
+        if (_revealSystem != null) _revealSystem.StopReveal();
+
+        Recording playerRecording = _playerRecorder.StopRecording();
+        Recording botRecording = _botRecorder.StopRecording();
+
+        _pastRecordings.Clear();
+        _pastRecordings.Add(playerRecording);
+        _pastRecordings.Add(botRecording);
 
         CurrentState = BattleState.Idle;
         OnRecordingFinished?.Invoke();
 
         _liveController.SetInactiveState(true);
+        _botController.SetInactiveState(true);
 
-        if (_recordingTurn == 1)
-        {
-            _recordingTurn++;
-            InitializeNextTurn();
-        }
-        else if (_recordingTurn == 2)
-        {
-            _recordingTurn++;
-            PrepareBattlePhase();
-        }
+        PrepareBattlePhase();
     }
 
     private void HandleFighterSpawned(Fighter fighter)
@@ -212,9 +233,16 @@ public class BattleManager : MonoBehaviour
         OnFighterSpawned?.Invoke(fighter);
     }
 
+    private void HandleEnemyPositionRevealed(Vector3 aiWorldPosition)
+    {
+        Debug.Log($"Enemy position revealed at: {aiWorldPosition}");
+    }
+
     private void PrepareBattlePhase()
     {
         _liveController.gameObject.SetActive(false);
+        _botController.gameObject.SetActive(false);
+
         _playerCamera.SetActive(false);
 
         bool isFirstRoundOfMatch = _fighters.Count == 0;
@@ -277,6 +305,7 @@ public class BattleManager : MonoBehaviour
         CurrentState = BattleState.Idle;
 
         _liveController.gameObject.SetActive(true);
+        _botController.gameObject.SetActive(true);
 
         OnRoundContinues?.Invoke(nextRound);
 
@@ -305,6 +334,7 @@ public class BattleManager : MonoBehaviour
         _arenaController?.ResetArena();
 
         _liveController.gameObject.SetActive(true);
+        _botController.gameObject.SetActive(true);
 
         foreach (var fighter in _fighters)
         {

@@ -22,28 +22,66 @@ public class InputRecorder : MonoBehaviour
     private Vector3 _recordingStartVelocity;
     private Vector3 _recordingStartAngularVelocity;
 
-    private Rigidbody _playerRb;
+
+    private PlayerController _target;
+    private IInputSource _source;
+    private Rigidbody _targetRb;
+
 
     private CameraTargetController _cameraTarget;
 
-    private void Start()
+    public void BeginRecording(PlayerController target, IInputSource source)
     {
-        _playerRb = BattleManager.Instance.LivePlayer.GetComponent<Rigidbody>();
-        _cameraTarget = BattleManager.Instance.LivePlayer.GetComponentInChildren<CameraTargetController>();
+        UnbindSource();
 
-        GameInput.Instance.OnJumpAction += HandleJump;
-        GameInput.Instance.OnUseAbilityAction += HandleMobilityAbility;
-        GameInput.Instance.OnFireAction += HandleFire;
+        _target = target;
+        _source = source;
+
+        _targetRb = _target.GetComponent<Rigidbody>();
+        _cameraTarget = _target.GetComponentInChildren<CameraTargetController>();
+
+        _source.OnFirePressed += HandleFire;
+        _source.OnJumpPressed += HandleJump;
+        _source.OnMobilityAbilityPressed += HandleMobilityAbility;
+
+
+        _inputFrames.Clear();
+        _accumulatedLookDelta = Vector3.zero;
+        _jumpPressedThisFixedFrame = false;
+        _firePressedThisFixedFrame = false;
+        _mobilityAbilityPressedThisFixedFrame = false;
+
+        _isRecording = true;
+
+        _recordingStartPosition = _targetRb.position;
+        _recordingStartBodyRotation = _targetRb.rotation;
+        _recordingStartCameraRotation = _cameraTarget != null ? _cameraTarget.GetCurrentRotation() : Vector3.zero;
+        _recordingStartVelocity = _targetRb.linearVelocity;
+        _recordingStartAngularVelocity = _targetRb.angularVelocity;
     }
 
-    private void OnDestroy()
+    public Recording StopRecording()
     {
-        if (GameInput.Instance != null)
-        {
-            GameInput.Instance.OnJumpAction -= HandleJump;
-            GameInput.Instance.OnUseAbilityAction -= HandleMobilityAbility;
-            GameInput.Instance.OnFireAction -= HandleFire;
-        }
+        _isRecording = false;
+        UnbindSource();
+        return new Recording(
+            new List<FrameInput>(_inputFrames),
+            _recordingStartPosition,
+            _recordingStartBodyRotation,
+            _recordingStartCameraRotation,
+            _recordingStartVelocity,
+            _recordingStartAngularVelocity
+        );
+    }
+
+    private void UnbindSource()
+    {
+        if (_source == null) return;
+
+        _source.OnFirePressed -= HandleFire;
+        _source.OnJumpPressed -= HandleJump;
+        _source.OnMobilityAbilityPressed -= HandleMobilityAbility;
+        _source = null;
     }
 
     private void HandleFire()
@@ -72,38 +110,7 @@ public class InputRecorder : MonoBehaviour
     {
         if (!_isRecording) return;
 
-        _accumulatedLookDelta += GameInput.Instance.GetLookVector();
-    }
-
-    public void StartRecording()
-    {
-        _inputFrames.Clear();
-        _accumulatedLookDelta = Vector2.zero;
-
-        _jumpPressedThisFixedFrame = false;
-        _firePressedThisFixedFrame = false;
-        _mobilityAbilityPressedThisFixedFrame = false;
-
-        _isRecording = true;
-
-        _recordingStartPosition = _playerRb.position;
-        _recordingStartBodyRotation = _playerRb.rotation;
-        _recordingStartCameraRotation = _cameraTarget.GetCurrentRotation();
-        _recordingStartVelocity = _playerRb.linearVelocity;
-        _recordingStartAngularVelocity = _playerRb.angularVelocity;
-    }
-
-    public Recording StopRecording()
-    {
-        _isRecording = false;
-        return new Recording(
-            new List<FrameInput>(_inputFrames),
-            _recordingStartPosition,
-            _recordingStartBodyRotation,
-            _recordingStartCameraRotation,
-            _recordingStartVelocity,
-            _recordingStartAngularVelocity
-        );
+        _accumulatedLookDelta += _source.GetLookDelta();
     }
 
     private void FixedUpdate()
@@ -112,10 +119,10 @@ public class InputRecorder : MonoBehaviour
 
         _inputFrames.Add(new FrameInput
         {
-            moveInput = GameInput.Instance.GetMovementVectorNormalized(),
-            worldMoveDirection = BattleManager.Instance.LivePlayer.CurrentMoveDirection,
+            moveInput = _source.GetMoveInput(),
+            worldMoveDirection = _target.CurrentMoveDirection,
             lookDelta = _accumulatedLookDelta,
-            aimPoint = BattleManager.Instance.LivePlayer.InputSource.GetAimPoint(),
+            aimPoint = _source.GetAimPoint(),
             jumpPressed = _jumpPressedThisFixedFrame,
             firePressed = _firePressedThisFixedFrame,
             abilityPressed = _mobilityAbilityPressedThisFixedFrame

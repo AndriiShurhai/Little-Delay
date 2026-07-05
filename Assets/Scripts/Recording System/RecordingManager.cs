@@ -49,8 +49,8 @@ public class RecordingManager : MonoBehaviour
 
     private void OnRecordStart()
     {
-        BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
-        _inputRecorder.StartRecording();
+        //BattleManager.Instance.LivePlayer.SetInputSource(_playerInputSource);
+        //_inputRecorder.StartRecording();
     }
 
     private void OnRecordStop()
