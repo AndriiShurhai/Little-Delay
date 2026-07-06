@@ -8,9 +8,10 @@ public class RevealSystem : MonoBehaviour
 {
     [SerializeField] private float _revealInterval = 7f;
 
-    public event Action<Vector3> OnEnemyPositionRevealed;
+    public event Action<Transform> OnEnemyPositionRevealed;
 
     private Coroutine _revealCoroutine;
+
 
     public void BeginReveals(Transform player, AIInputSource ai, float recordingDuration)
     {
@@ -36,7 +37,7 @@ public class RevealSystem : MonoBehaviour
             {
                 Vector3 playerPosition = player.position;
                 ai.ReceiveReveal(playerPosition);
-                OnEnemyPositionRevealed?.Invoke(ai.transform.position);
+                OnEnemyPositionRevealed?.Invoke(ai.transform);
             }
             yield return new WaitForSeconds(_revealInterval);
             elapsedTime += _revealInterval;

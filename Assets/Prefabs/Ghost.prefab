@@ -261,7 +261,7 @@ MonoBehaviour:
   _projectilePrefab: {fileID: 3419097370358318785, guid: 160029f46c9aa544cbd91ed89d4c0902, type: 3}
   _spawnPoint: {fileID: 6273962660418749715}
   _projectileSpeed: 40
-  _damage: 50
+  _damage: 20
 --- !u!114 &-8573606948956437389
 MonoBehaviour:
   m_ObjectHideFlags: 0

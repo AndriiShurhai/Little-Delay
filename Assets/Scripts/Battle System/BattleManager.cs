@@ -233,9 +233,9 @@ public class BattleManager : MonoBehaviour
         OnFighterSpawned?.Invoke(fighter);
     }
 
-    private void HandleEnemyPositionRevealed(Vector3 aiWorldPosition)
+    private void HandleEnemyPositionRevealed(Transform aiTransform)
     {
-        Debug.Log($"Enemy position revealed at: {aiWorldPosition}");
+        Debug.Log($"Enemy position revealed at: {aiTransform.position}");
     }
 
     private void PrepareBattlePhase()

@@ -25,6 +25,8 @@ public class Projectile : MonoBehaviour
 
         _rigidbody.linearVelocity = velocity;
 
+        gameObject.layer = ownerRoot.gameObject.layer;
+
         Destroy(gameObject, _lifetime);
     }
 
