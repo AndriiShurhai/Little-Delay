@@ -298,7 +298,7 @@ public class BattleManager : MonoBehaviour
             fighter.GhostObject.SetActive(false);
         }
 
-        _arenaController?.ShrinkForRound(nextRound);
+        _arenaController?.InwardMove(nextRound);
 
         _pastRecordings.Clear();
         _recordingTurn = 1;
