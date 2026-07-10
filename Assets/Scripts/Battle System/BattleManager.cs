@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Text;
 using UnityEngine;
 using Unity;
@@ -9,7 +10,7 @@ using System.Runtime.CompilerServices;
 public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance { get; private set; }
-    public enum BattleState { Idle, Countdown, Recording, PreBattleCountdown, BattlePhase}
+    public enum BattleState { Idle, Countdown, Recording, PreBattleCountdown, BattlePhase }
 
     public BattleState CurrentState { get; private set; } = BattleState.Idle;
 
@@ -17,14 +18,13 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private PlayerController _liveController;
     [SerializeField] private InputRecorder _playerRecorder;
 
-
     [Header("AI Opponent")]
     [SerializeField] private PlayerController _botController;
     [SerializeField] private AIInputSource _botInputSource;
     [SerializeField] private InputRecorder _botRecorder;
 
     [SerializeField] private RevealSystem _revealSystem;
-    
+
     [Header("Dependencies")]
     [SerializeField] private FighterSpawner _fighterSpawner;
     [SerializeField] private RoundManager _roundManager;
@@ -44,6 +44,10 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private GameObject _arenaCamera;
     [SerializeField] private GameObject _playerCamera;
 
+    [Header("Anti-passivity Punishment")]
+    [SerializeField] private float _passivityDamagePerTick = 15f;
+    [SerializeField] private int _passivityDamageTicks = 3;
+
     [Header("UI Feedback Events")]
     public UnityEvent<int> OnCountdownTick;
     public UnityEvent<float> OnRecordingTick;
@@ -60,11 +64,11 @@ public class BattleManager : MonoBehaviour
 
     private readonly List<Recording> _pastRecordings = new();
     private readonly List<Fighter> _fighters = new();
+    private readonly List<Coroutine> _activePenaltyRoutines = new();
 
     private int _recordingTurn = 1;
     private float _stateTimer;
     private int _lastCountdownSecond;
-
 
     private void Awake()
     {
@@ -110,7 +114,6 @@ public class BattleManager : MonoBehaviour
         {
             _revealSystem.OnEnemyPositionRevealed -= HandleEnemyPositionRevealed;
         }
-
     }
 
     private void Update()
@@ -147,7 +150,6 @@ public class BattleManager : MonoBehaviour
                 EndRecordingPhase();
             }
         }
-
         else if (CurrentState == BattleState.PreBattleCountdown)
         {
             _stateTimer -= Time.deltaTime;
@@ -170,7 +172,7 @@ public class BattleManager : MonoBehaviour
     {
         if (CurrentState == BattleState.Countdown || CurrentState == BattleState.Recording)
             return;
-        
+
         Debug.Log("Initializing next turn: " + _recordingTurn);
 
         _liveController.Teleport(_spawnPoint.position, _spawnPoint.rotation);
@@ -259,7 +261,6 @@ public class BattleManager : MonoBehaviour
                 _fighters.Add(fighter);
             }
         }
-
         else
         {
             for (int i = 0; i < _fighters.Count; i++)
@@ -285,12 +286,42 @@ public class BattleManager : MonoBehaviour
         foreach (var fighter in _fighters)
         {
             fighter.GhostObject.GetComponent<PlayerController>().SetInvincible(false);
+            // fighter.GhostObject.GetComponent<PlayerController>().ResetAllDebuffs();
+        }
+
+        for (int i = 0; i < _fighters.Count; i++)
+        {
+            // Assuming your Recording class has a WasPassive or IsPassive boolean
+            if (_pastRecordings[i].WasPassive)
+            {
+                Debug.Log($"Fighter {i} was passive in the last round. Applying damage ticks.");
+                Coroutine penaltyRoutine = StartCoroutine(PassivityDamageRoutine(_fighters[i]));
+                _activePenaltyRoutines.Add(penaltyRoutine);
+            }
         }
         _fighterSpawner.ResumeALL(_fighters);
     }
 
-    private void HandleRoundContinues(int nextRound) 
+    private IEnumerator PassivityDamageRoutine(Fighter fighter)
     {
+        float tickInterval = _recordingDuration / (_passivityDamageTicks + 1);
+
+        for (int i = 0; i < _passivityDamageTicks; i++)
+        {
+            yield return new WaitForSeconds(tickInterval);
+
+            if (fighter != null && fighter.IsAlive)
+            {
+                fighter.Health.TakeDamage(_passivityDamagePerTick);
+                Debug.Log($"<color=red>Passivity Penalty!</color> Fighter {fighter.ID} took {_passivityDamagePerTick} damage.");
+            }
+        }
+    }
+
+    private void HandleRoundContinues(int nextRound)
+    {
+        ClearPenaltyRoutines();
+
         foreach (Fighter fighter in _fighters)
         {
             fighter.SpawnPoint.position = fighter.GhostObject.transform.position;
@@ -326,6 +357,7 @@ public class BattleManager : MonoBehaviour
 
     private void ResetForNextMatch()
     {
+        ClearPenaltyRoutines();
         _roundManager.ClearForNewMatch();
         _pastRecordings.Clear();
         _recordingTurn = 1;
@@ -342,5 +374,14 @@ public class BattleManager : MonoBehaviour
         }
 
         _fighters.Clear();
+    }
+
+    private void ClearPenaltyRoutines()
+    {
+        foreach (var routine in _activePenaltyRoutines)
+        {
+            if (routine != null) StopCoroutine(routine);
+        }
+        _activePenaltyRoutines.Clear();
     }
 }

@@ -7,6 +7,12 @@ public class InputRecorder : MonoBehaviour
 {
     public bool IsRecording => _isRecording;
 
+    [SerializeField] private float _passivityThreshold = 3f;
+    [SerializeField] private float _maxIdlePercentage = 0.6f;
+
+    private float _minX, _maxX, _minZ, _maxZ;
+    private float _idleTime;
+
     private readonly List<FrameInput> _inputFrames = new();
 
     private bool _isRecording;
@@ -58,19 +64,38 @@ public class InputRecorder : MonoBehaviour
         _recordingStartCameraRotation = _cameraTarget != null ? _cameraTarget.GetCurrentRotation() : Vector3.zero;
         _recordingStartVelocity = _targetRb.linearVelocity;
         _recordingStartAngularVelocity = _targetRb.angularVelocity;
+
+        _minX = _maxX = _targetRb.position.x;
+        _minZ = _maxZ = _targetRb.position.z;
+        _idleTime = 0f;
     }
 
     public Recording StopRecording()
     {
         _isRecording = false;
         UnbindSource();
+
+
+        float widthMoved = _maxX - _minX;
+        float depthMoved = _maxZ - _minZ;
+        bool failedAreaTest = (widthMoved < _passivityThreshold) && (depthMoved < _passivityThreshold);
+
+        float totalRecordingDuration = _inputFrames.Count * Time.fixedDeltaTime;
+        float idlePercentage = _idleTime / totalRecordingDuration;
+        bool failedIdleTest = idlePercentage > _maxIdlePercentage;
+
+        bool isPassive = failedAreaTest || failedIdleTest;
+
+        Debug.Log($"Recording Results - Width: {widthMoved}, Depth: {depthMoved}, Idle Percentage: {idlePercentage}, Is Passive: {isPassive}");
+
         return new Recording(
             new List<FrameInput>(_inputFrames),
             _recordingStartPosition,
             _recordingStartBodyRotation,
             _recordingStartCameraRotation,
             _recordingStartVelocity,
-            _recordingStartAngularVelocity
+            _recordingStartAngularVelocity,
+            isPassive
         );
     }
 
@@ -132,5 +157,17 @@ public class InputRecorder : MonoBehaviour
         _jumpPressedThisFixedFrame = false;
         _firePressedThisFixedFrame = false;
         _mobilityAbilityPressedThisFixedFrame = false;
+
+        Vector3 pos = _targetRb.position;
+        if (pos.x < _minX) _minX = pos.x;
+        if (pos.x > _maxX) _maxX = pos.x;
+        if (pos.z < _minZ) _minZ = pos.z;
+        if (pos.z > _maxZ) _maxZ = pos.z;
+
+
+        if (_source.GetMoveInput().sqrMagnitude < 0.01f)
+        {
+            _idleTime += Time.fixedDeltaTime;
+        }
     }
 }

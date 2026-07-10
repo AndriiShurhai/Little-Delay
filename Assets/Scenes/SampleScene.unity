@@ -223,6 +223,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3fe0294c0fc17b34db51739c36724235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InputRecorder
+  _passivityThreshold: 3
+  _maxIdlePercentage: 0.6
 --- !u!4 &61151840
 Transform:
   m_ObjectHideFlags: 0
@@ -541,7 +543,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: -0.000000004599733, y: -0.7071068, z: -0.000000004599734, w: 0.7071067}
-  m_LocalPosition: {x: 14.01, y: 3.293, z: 2.0000007}
+  m_LocalPosition: {x: 17.01, y: 3.293, z: 2.000001}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1145,6 +1147,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3fe0294c0fc17b34db51739c36724235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InputRecorder
+  _passivityThreshold: 3
+  _maxIdlePercentage: 0.6
 --- !u!114 &548111604
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3011,6 +3015,8 @@ MonoBehaviour:
   _spawnPointSecond: {fileID: 1461049845}
   _arenaCamera: {fileID: 1476861557}
   _playerCamera: {fileID: 1879819366}
+  _passivityDamagePerTick: 15
+  _passivityDamageTicks: 3
   OnCountdownTick:
     m_PersistentCalls:
       m_Calls: []
@@ -3859,7 +3865,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 8.55
+      value: 11.55
       objectReference: {fileID: 0}
     - target: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_LocalPosition.y
@@ -3867,7 +3873,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 2
+      value: 2.0000002
       objectReference: {fileID: 0}
     - target: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_LocalRotation.w

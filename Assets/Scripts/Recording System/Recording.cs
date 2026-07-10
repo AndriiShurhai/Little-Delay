@@ -12,13 +12,16 @@ public class Recording
     public Vector3 StartVelocity { get; }
     public Vector3 StartAngularVelocity { get; }
 
+    public bool WasPassive { get; }
+
     public Recording(
         List<FrameInput> frames,
         Vector3 startPosition,
         Quaternion startBodyRotation,
         Vector3 startCameraRotation,
         Vector3 startVelocity,
-        Vector3 startAngularVelocity)
+        Vector3 startAngularVelocity,
+        bool wasPassive)
     {
         Frames = frames.AsReadOnly();
         StartPosition = startPosition;
@@ -26,5 +29,6 @@ public class Recording
         StartCameraRotation = startCameraRotation;
         StartVelocity = startVelocity;
         StartAngularVelocity = startAngularVelocity;
+        WasPassive = wasPassive;
     }
 }
