@@ -523,7 +523,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 262493228}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1173694840}
+        m_TargetAssemblyTypeName: GameOverScreenUI, Assembly-CSharp
+        m_MethodName: Quit
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &262493228
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1623,7 +1635,8 @@ PrefabInstance:
       value: 9
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 8768635149433999138, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}

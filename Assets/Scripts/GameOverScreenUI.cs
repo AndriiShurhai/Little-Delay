@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UI;
 
 
 public class GameOverScreenUI : MonoBehaviour
@@ -21,5 +22,10 @@ public class GameOverScreenUI : MonoBehaviour
     public void ShowGameOverScreen()
     {
         _gameOverScreen.SetActive(true);
+    }
+
+    public void Quit()
+    {
+        SceneLoader.Instance?.LoadScene("MainMenu");
     }
 }
