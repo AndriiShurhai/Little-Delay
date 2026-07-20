@@ -4,6 +4,8 @@ using TMPro;
 public class BattleUIManager : MonoBehaviour
 {
     [Header("UI Elements")]
+    [SerializeField] private GameObject _roundsCountPanel;
+    [SerializeField] private GameObject _roundUIPrefab;
     [SerializeField] private TextMeshProUGUI _countdownDisplay;
     [SerializeField] private TextMeshProUGUI _announcementDisplay;
 
@@ -21,15 +23,17 @@ public class BattleUIManager : MonoBehaviour
             BattleManager.Instance.OnRoundContinues.AddListener(ShowRoundContinues);
             BattleManager.Instance.OnFighterWon.AddListener(ShowFighterWon);
             BattleManager.Instance.OnMatchDraw.AddListener(ShowMatchDraw);
+            BattleManager.Instance.OnRecordingStarts.AddListener(ShowNewRoundStarts);
+            BattleManager.Instance.OnMatchStarted += () => ClearRoundsCountDisplay();
         }
 
         ClearCenterDisplay();
+        ClearRoundsCountDisplay();
         _timerDisplay.text = "";
     }
 
     private void OnDestroy()
     {
-        // Always clean up listeners to prevent memory leaks or null reference errors
         if (BattleManager.Instance != null)
         {
             BattleManager.Instance.OnCountdownTick.RemoveListener(UpdateCountdown);
@@ -39,6 +43,8 @@ public class BattleUIManager : MonoBehaviour
             BattleManager.Instance.OnRoundContinues.RemoveListener(ShowRoundContinues);
             BattleManager.Instance.OnFighterWon.RemoveListener(ShowFighterWon);
             BattleManager.Instance.OnMatchDraw.RemoveListener(ShowMatchDraw);
+            BattleManager.Instance.OnRecordingStarts.RemoveListener(ShowNewRoundStarts);
+            BattleManager.Instance.OnMatchStarted -= () => ClearRoundsCountDisplay();
         }
     }
 
@@ -48,18 +54,15 @@ public class BattleUIManager : MonoBehaviour
         _countdownDisplay.gameObject.SetActive(true);
         _countdownDisplay.text = seconds.ToString();
 
-        // Keep the timer clear while counting down
         _timerDisplay.text = "";
     }
 
     private void UpdateTimer(float timeRemaining)
     {
-        // Hide the giant center text while playing/recording
         _announcementDisplay.gameObject.SetActive(false);
         _countdownDisplay.gameObject.SetActive(false);
 
-        // Format to show 2 decimal places (e.g., "Recording: 9.99s")
-        _timerDisplay.text = $"Recording: {timeRemaining:F2}s";
+        _timerDisplay.text = $"{timeRemaining:F2}s";
     }
 
     private void ShowRecordingFinished()
@@ -77,7 +80,6 @@ public class BattleUIManager : MonoBehaviour
         _announcementDisplay.text = "FIGHT!";
         _timerDisplay.text = "";
 
-        // Hide the "FIGHT!" text after 1.5 seconds so it doesn't block the screen
         Invoke(nameof(ClearCenterDisplay), 1.5f);
     }
 
@@ -89,6 +91,11 @@ public class BattleUIManager : MonoBehaviour
         _timerDisplay.text = "";
 
         Invoke(nameof(ClearCenterDisplay), 1.5f);
+    }
+
+    private void ShowNewRoundStarts()
+    {
+        Instantiate(_roundUIPrefab, _roundsCountPanel.transform);
     }
 
     private void ShowFighterWon(int fighterId)
@@ -117,5 +124,13 @@ public class BattleUIManager : MonoBehaviour
         _announcementDisplay.gameObject.SetActive(false);
         _countdownDisplay.text = "";
         _countdownDisplay.gameObject.SetActive(false);
+    }
+
+    private void ClearRoundsCountDisplay()
+    {
+        foreach (Transform child in _roundsCountPanel.transform)
+        {
+            Destroy(child.gameObject);
+        }
     }
 }

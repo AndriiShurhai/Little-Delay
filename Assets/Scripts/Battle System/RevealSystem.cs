@@ -7,11 +7,21 @@ using UnityEngine;
 public class RevealSystem : MonoBehaviour
 {
     [SerializeField] private float _revealInterval = 7f;
+    [SerializeField] private RevealVisualizer _revealVisualizer;
+
+    [SerializeField] private SpawnIndicator _spawnIndicator;
 
     public event Action<Transform> OnEnemyPositionRevealed;
 
     private Coroutine _revealCoroutine;
 
+    public void RevealEnemyForDuration(Transform enemyTransform, float duration)
+    {
+        if (_spawnIndicator != null)
+        {
+            _spawnIndicator.ShowIndicator(enemyTransform.position, duration);
+        }
+    }
 
     public void BeginReveals(Transform player, AIInputSource ai, float recordingDuration)
     {
@@ -25,6 +35,11 @@ public class RevealSystem : MonoBehaviour
         {
             StopCoroutine(_revealCoroutine);
             _revealCoroutine = null;
+        }
+
+        if (_revealVisualizer != null)
+        {
+            _revealVisualizer.ForceStopVisuals();
         }
     }
 

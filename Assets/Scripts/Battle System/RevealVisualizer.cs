@@ -20,6 +20,8 @@ public class RevealVisualizer : MonoBehaviour
     private static Material _lineMaterial;
     private Transform _enemy;
 
+    private Coroutine _activeSequence;
+
     private void Start()
     {
         if (_revealSystem != null)
@@ -41,8 +43,19 @@ public class RevealVisualizer : MonoBehaviour
         if (_currentState == RevealVisualState.Hidden)
         {
             _recordedLine.positionCount = 0;
-            StartCoroutine(RevealSequence());
+            if (_activeSequence != null) StopCoroutine(_activeSequence);
+            _activeSequence = StartCoroutine(RevealSequence());
         }
+    }
+
+    public void ForceStopVisuals()
+    {
+        if (_activeSequence != null)
+        {
+            StopCoroutine(_activeSequence);
+            _activeSequence = null;
+        }
+        Reset();
     }
 
     private IEnumerator RevealSequence()
@@ -92,6 +105,10 @@ public class RevealVisualizer : MonoBehaviour
         {
             AppendPoint(_recordedLine, _enemy.position);
         }
+        else
+        {
+            Debug.Log($"RevealVisualizer: Current state is {_currentState}, no enemy to track.");
+        }
     }
 
     private LineRenderer CreateLine(string objectName, Color color, float width)
@@ -119,7 +136,15 @@ public class RevealVisualizer : MonoBehaviour
 
     private static void AppendPoint(LineRenderer lr, Vector3 position)
     {
+        Vector3 targetPos = position + Vector3.up * 0.1f;
+
+        if (lr.positionCount > 0)
+        {
+            float distance = Vector3.Distance(lr.GetPosition(lr.positionCount - 1), targetPos);
+            if (distance < 0.05f) return;
+        }
+
         lr.positionCount++;
-        lr.SetPosition(lr.positionCount - 1, position + Vector3.up * 0.1f);
+        lr.SetPosition(lr.positionCount - 1, targetPos);
     }
 }

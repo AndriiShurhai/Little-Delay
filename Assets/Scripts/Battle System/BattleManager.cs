@@ -1,18 +1,30 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 using System.Collections;
 using System.Text;
 using UnityEngine;
-using Unity;
+using Unity.Cinemachine;
 using UnityEngine.Events;
 using System.Runtime.CompilerServices;
 
 public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance { get; private set; }
-    public enum BattleState { Idle, Countdown, Recording, PreBattleCountdown, BattlePhase }
 
-    public BattleState CurrentState { get; private set; } = BattleState.Idle;
+    public enum BattleState
+    {
+        ShowdownPreview,
+        Idle,
+        CameraTransition,
+        Countdown,
+        Recording,
+        PreBattleCountdown,
+        BattlePhase,
+        MatchOver
+    }
+
+    public BattleState CurrentState { get; private set; } = BattleState.ShowdownPreview;
 
     [Header("Player")]
     [SerializeField] private PlayerController _liveController;
@@ -35,20 +47,24 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private Transform _spawnPointSecond;
 
     [Header("Phase Timing")]
+    [SerializeField] private readonly float _showdownPreviewDuration = 3f;
     [SerializeField] private readonly float _countdownDuration = 3f;
-    [SerializeField] private readonly float _recordingDuration = 10f;
+    [SerializeField] private readonly float _recordingDuration = 20f;
     [SerializeField] private readonly float _battleCountdownDuration = 3f;
 
     [Header("Cameras")]
     [Tooltip("The static overview camera for the battle phase")]
     [SerializeField] private GameObject _arenaCamera;
     [SerializeField] private GameObject _playerCamera;
+    [Tooltip("The CinemachineBrain that blends between _arenaCamera and _playerCamera. Assign the one on your Main Camera.")]
+    [SerializeField] private CinemachineBrain _cinemachineBrain;
 
     [Header("Anti-passivity Punishment")]
     [SerializeField] private float _passivityDamagePerTick = 15f;
     [SerializeField] private int _passivityDamageTicks = 3;
 
     [Header("UI Feedback Events")]
+    public UnityEvent OnShowdownPreviewStarted;
     public UnityEvent<int> OnCountdownTick;
     public UnityEvent<float> OnRecordingTick;
     public UnityEvent OnRecordingFinished;
@@ -56,11 +72,16 @@ public class BattleManager : MonoBehaviour
     public UnityEvent<int> OnRoundContinues;
     public UnityEvent<int> OnFighterWon;
     public UnityEvent OnMatchDraw;
+    public UnityEvent<int> OnRoundStarts;
+    public UnityEvent OnRecordingStarts;
+
+    [SerializeField] private bool _isPassivityPunishmentOn = true;
 
     public event Action<Fighter> OnFighterSpawned;
     public event Action OnMatchStarted;
 
     public PlayerController LivePlayer => _liveController;
+    public Transform PlayerSpawnPoint => _spawnPoint;
 
     private readonly List<Recording> _pastRecordings = new();
     private readonly List<Fighter> _fighters = new();
@@ -83,7 +104,6 @@ public class BattleManager : MonoBehaviour
     private void Start()
     {
         GameInput.Instance.OnRoundStartAction += InitializeNextTurn;
-        GameInput.Instance.OnRoundStartAction += () => OnMatchStarted?.Invoke();
 
         _liveController.SetInputSource(FindAnyObjectByType<PlayerInputSource>());
         _botController.SetInputSource(_botInputSource);
@@ -91,11 +111,13 @@ public class BattleManager : MonoBehaviour
         _roundManager.OnMatchWon += HandleMatchWon;
         _roundManager.OnMatchDraw += HandleMatchDraw;
         _roundManager.OnRoundContinues += HandleRoundContinues;
-
+        _roundManager.OnRoundStarts += HandleRoundStarts;
         if (_revealSystem != null)
         {
             _revealSystem.OnEnemyPositionRevealed += HandleEnemyPositionRevealed;
         }
+
+        StartShowdownPreview();
     }
 
     private void OnDestroy()
@@ -103,12 +125,12 @@ public class BattleManager : MonoBehaviour
         if (GameInput.Instance != null)
         {
             GameInput.Instance.OnRoundStartAction -= InitializeNextTurn;
-            GameInput.Instance.OnRoundStartAction -= () => OnMatchStarted?.Invoke();
         }
         _fighterSpawner.OnGhostCreated -= HandleFighterSpawned;
         _roundManager.OnMatchWon -= HandleMatchWon;
         _roundManager.OnMatchDraw -= HandleMatchDraw;
         _roundManager.OnRoundContinues -= HandleRoundContinues;
+        _roundManager.OnRoundStarts -= HandleRoundStarts;
 
         if (_revealSystem != null)
         {
@@ -123,7 +145,16 @@ public class BattleManager : MonoBehaviour
 
     private void HandleStateTimers()
     {
-        if (CurrentState == BattleState.Countdown)
+        if (CurrentState == BattleState.ShowdownPreview)
+        {
+            _stateTimer -= Time.deltaTime;
+
+            if (_stateTimer <= 0f)
+            {
+                EndShowdownPreview();
+            }
+        }
+        else if (CurrentState == BattleState.Countdown)
         {
             _stateTimer -= Time.deltaTime;
 
@@ -166,11 +197,27 @@ public class BattleManager : MonoBehaviour
                 StartBattlePhase();
             }
         }
+
+        // BattleState.CameraTransition and BattleState.MatchOver are advanced
+        // externally (by a coroutine / a player-driven "continue" call), not by a timer here.
+    }
+
+    private void StartShowdownPreview()
+    {
+        CurrentState = BattleState.ShowdownPreview;
+        _stateTimer = _showdownPreviewDuration;
+        OnShowdownPreviewStarted?.Invoke();
+    }
+
+    private void EndShowdownPreview()
+    {
+        OnMatchStarted?.Invoke();
+        InitializeNextTurn();
     }
 
     private void InitializeNextTurn()
     {
-        if (CurrentState == BattleState.Countdown || CurrentState == BattleState.Recording)
+        if (CurrentState != BattleState.Idle && CurrentState != BattleState.ShowdownPreview)
             return;
 
         Debug.Log("Initializing next turn: " + _recordingTurn);
@@ -184,9 +231,16 @@ public class BattleManager : MonoBehaviour
         _botInputSource.ResetKnowledge();
         _playerCamera.SetActive(true);
 
+        CurrentState = BattleState.CameraTransition;
+        StartCoroutine(WaitForCameraBlend(BeginPreRecordingCountdown));
+    }
+
+    private void BeginPreRecordingCountdown()
+    {
         CurrentState = BattleState.Countdown;
         _stateTimer = _countdownDuration;
         _lastCountdownSecond = -1;
+        _revealSystem?.RevealEnemyForDuration(_botController.transform, _countdownDuration);
     }
 
     private void StartRecordingPhase()
@@ -207,6 +261,7 @@ public class BattleManager : MonoBehaviour
         {
             _revealSystem.BeginReveals(_liveController.transform, _botInputSource, _recordingDuration);
         }
+        OnRecordingStarts?.Invoke();
     }
 
     private void EndRecordingPhase()
@@ -273,9 +328,33 @@ public class BattleManager : MonoBehaviour
 
         _roundManager.BeginRound();
 
+        CurrentState = BattleState.CameraTransition;
+        StartCoroutine(WaitForCameraBlend(BeginPreBattleCountdown));
+    }
+
+    private void BeginPreBattleCountdown()
+    {
         CurrentState = BattleState.PreBattleCountdown;
         _stateTimer = _battleCountdownDuration;
         _lastCountdownSecond = -1;
+    }
+
+    /// <summary>
+    /// Waits for the CinemachineBrain to finish blending between _arenaCamera and _playerCamera
+    /// before running onComplete. This keeps countdown timers (and any visual feedback tied to
+    /// them, like a spawn-point pulse) from starting mid-cut.
+    /// </summary>
+    private IEnumerator WaitForCameraBlend(Action onComplete)
+    {
+        // Give the Brain a frame to register the priority/active change we just made.
+        yield return null;
+
+        if (_cinemachineBrain != null)
+        {
+            yield return new WaitUntil(() => !_cinemachineBrain.IsBlending);
+        }
+
+        onComplete?.Invoke();
     }
 
     private void StartBattlePhase()
@@ -304,6 +383,12 @@ public class BattleManager : MonoBehaviour
 
     private IEnumerator PassivityDamageRoutine(Fighter fighter)
     {
+        if (!_isPassivityPunishmentOn)
+        {
+            yield break;
+        }
+
+
         float tickInterval = _recordingDuration / (_passivityDamageTicks + 1);
 
         for (int i = 0; i < _passivityDamageTicks; i++)
@@ -343,16 +428,34 @@ public class BattleManager : MonoBehaviour
         InitializeNextTurn();
     }
 
+    private void HandleRoundStarts(int roundNumber)
+    {
+        OnRoundStarts?.Invoke(roundNumber);
+    }
+
     private void HandleMatchWon(Fighter winner)
     {
+        CurrentState = BattleState.MatchOver;
         OnFighterWon?.Invoke(winner.ID);
-        ResetForNextMatch();
     }
 
     private void HandleMatchDraw()
     {
+        CurrentState = BattleState.MatchOver;
         OnMatchDraw?.Invoke();
+    }
+
+    /// <summary>
+    /// Call this from the game-over screen's "continue" / "rematch" button once the
+    /// player has actually seen the result. Tearing the arena down happens here,
+    /// not the moment the round ends.
+    /// </summary>
+    public void ContinueAfterMatchOver()
+    {
+        if (CurrentState != BattleState.MatchOver) return;
+
         ResetForNextMatch();
+        StartShowdownPreview();
     }
 
     private void ResetForNextMatch()
@@ -374,6 +477,7 @@ public class BattleManager : MonoBehaviour
         }
 
         _fighters.Clear();
+        _playerCamera.SetActive(true);
     }
 
     private void ClearPenaltyRoutines()

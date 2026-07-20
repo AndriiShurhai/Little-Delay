@@ -2,11 +2,15 @@
 
 public class AbilityManager : MonoBehaviour
 {
+    public BaseAbility EquippedMobility => _equippedMobility;
+    public BaseAbility EquippedAttack => _equippedAttack;
+
     [Header("Loadout Slots")]
     [SerializeField] private BaseAbility _equippedMobility;
     [SerializeField] private BaseAbility _equippedAttack;
 
-    private void Start()
+
+    private void Awake()
     {
         ICharacterPhysics owner = GetComponentInParent<ICharacterPhysics>();
 
@@ -21,6 +25,9 @@ public class AbilityManager : MonoBehaviour
 
         if (_equippedAttack != null)
             _equippedAttack.Initialize(owner);
+    }
+    private void Start()
+    {
     }
 
     public void TryUseMobility(Vector3 direction)

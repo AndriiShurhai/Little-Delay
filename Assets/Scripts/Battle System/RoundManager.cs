@@ -9,6 +9,7 @@ public class RoundManager : MonoBehaviour
     public event Action<Fighter> OnMatchWon;
     public event Action OnMatchDraw;
     public event Action<int> OnRoundContinues;
+    public event Action<int> OnRoundStarts;
 
     private readonly List<Fighter> _fighters = new();
 
@@ -40,6 +41,7 @@ public class RoundManager : MonoBehaviour
 
     public void BeginRound()
     {
+        OnRoundStarts?.Invoke(_currentRound);
         _pendingPlaybackCompletions = 0;
         _deathPending = false;
         _roundResolved = false;
