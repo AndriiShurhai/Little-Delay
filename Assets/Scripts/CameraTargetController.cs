@@ -10,7 +10,14 @@ public class CameraTargetController : MonoBehaviour
     private float pitch; // Up/Down (X axis)
     private float yaw;   // Left/Right (Y axis)
 
+    private PlayerController _ownerController;
+
     public float Yaw => yaw;
+
+    private void Awake()
+    {
+        _ownerController = GetComponentInParent<PlayerController>();
+    }
 
     public void SetRotation(Vector3 angles)
     {
@@ -26,7 +33,10 @@ public class CameraTargetController : MonoBehaviour
 
     private void Update()
     {
-        Vector2 lookInput = BattleManager.Instance.LivePlayer.InputSource.GetLookDelta();
+        IInputSource inputSource = _ownerController != null ? _ownerController.InputSource : null;
+        if (inputSource == null) return;
+
+        Vector2 lookInput = inputSource.GetLookDelta();
 
         yaw += lookInput.x * lookSensitivity;
         pitch -= lookInput.y * lookSensitivity;

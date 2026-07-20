@@ -1688,8 +1688,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 366bf9070a366af45a5bd22d4e57cce9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AIInputSource
-  _stopDistance: 1.5
+  _engageRange: 12
+  _preferredRange: 6
+  _tooCloseRange: 1.5
+  _maxFireRange: 14
   _fireInterval: 0.6
+  _fireJitter: 0.15
+  _strafeSwitchInterval: 1.2
+  _strafeSwitchJitter: 0.5
+  _dashDecisionInterval: 1.5
+  _dashDecisionJitter: 0.5
+  _predictionHorizon: 1.5
+  _turnSpeed: 360
+  _randomJumpChancePerSecond: 0.15
 --- !u!4 &548111614 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
@@ -3137,7 +3148,7 @@ Canvas:
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
-  m_SortingOrder: 96
+  m_SortingOrder: 0
   m_TargetDisplay: 0
 --- !u!224 &1172988194
 RectTransform:
@@ -4515,7 +4526,7 @@ MonoBehaviour:
   OnRecordingStarts:
     m_PersistentCalls:
       m_Calls: []
-  _isPassivityPunishmentOn: 0
+  _isPassivityPunishmentOn: 1
 --- !u!1 &1657803843
 GameObject:
   m_ObjectHideFlags: 0
