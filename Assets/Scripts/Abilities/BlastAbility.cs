@@ -29,10 +29,25 @@ public class BlastAbility : BaseAbility
             direction = Owner.Transform.forward;
         }
 
+        if (Physics.Raycast(origin, direction, out RaycastHit hit, Vector3.Distance(origin, targetPoint)))
+        {
+            targetPoint = hit.point;
+            direction = (targetPoint - origin).normalized;
+        }
+
         Projectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
 
         projectile.Initialize(direction * _projectileSpeed, _damage, Owner.Transform);
 
         StartCooldown();
+    }
+
+    private void OnDrawGizmos()
+    {
+        if (_spawnPoint == null)
+            return;
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawSphere(_spawnPoint.position, 0.1f);
     }
 }

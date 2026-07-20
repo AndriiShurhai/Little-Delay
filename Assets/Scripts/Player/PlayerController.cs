@@ -42,12 +42,17 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
     private Vector3 _dashVelocity;
 
     private AbilityManager _abilityManager;
+    private CameraTargetController _cameraTarget;
 
+    [Header("Aim/Body Rotation")]
+    [Tooltip("How fast the body turns to match the camera's yaw. Higher = snappier.")]
+    [SerializeField] private float _rotationSpeed = 15f;
 
     private void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
         _abilityManager = GetComponent<AbilityManager>();
+        _cameraTarget = GetComponentInChildren<CameraTargetController>();
     }
 
     private void Start()
@@ -77,7 +82,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         transform.rotation = rotation;
 
         _rigidbody.position = position;
-        GetComponentInChildren<CameraTargetController>().SetRotation(rotation.eulerAngles);
+        _cameraTarget.SetRotation(rotation.eulerAngles);
 
         _rigidbody.linearVelocity = Vector3.zero;
         _rigidbody.angularVelocity = Vector3.zero;
@@ -118,7 +123,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         else if (_inputSource is InputPlayback)
         {
             IsPlayingBack = true;
-        }   
+        }
     }
 
     public void SetInactiveState(bool inactive)
@@ -197,7 +202,7 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
         if (IsDeflected || _justRecovered)
         {
             CurrentMoveDirection = Vector3.zero;
-            return; 
+            return;
         }
 
         _inputSource.Tick();
@@ -215,11 +220,9 @@ public class PlayerController : MonoBehaviour, ICharacterPhysics
 
         //_rigidbody.linearVelocity = new Vector3(moveDirection.x * _moveSpeed, _rigidbody.linearVelocity.y, moveDirection.z * _moveSpeed);
 
-        if (moveDirection != Vector3.zero)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
-            _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, 10f * Time.fixedDeltaTime));
-        }
+
+        Quaternion targetRotation = Quaternion.Euler(0f, _cameraTarget.Yaw, 0f);
+        _rigidbody.MoveRotation(Quaternion.Slerp(_rigidbody.rotation, targetRotation, _rotationSpeed * Time.fixedDeltaTime));
 
         if (_pendingAbilityUse)
         {

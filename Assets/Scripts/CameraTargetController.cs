@@ -10,6 +10,7 @@ public class CameraTargetController : MonoBehaviour
     private float pitch; // Up/Down (X axis)
     private float yaw;   // Left/Right (Y axis)
 
+    public float Yaw => yaw;
 
     public void SetRotation(Vector3 angles)
     {
