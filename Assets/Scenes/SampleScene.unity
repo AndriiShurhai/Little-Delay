@@ -4443,6 +4443,10 @@ MonoBehaviour:
   _arenaController: {fileID: 1629880481}
   _spawnPoint: {fileID: 1802372371}
   _spawnPointSecond: {fileID: 658141162}
+  _showdownPreviewDuration: 3
+  _countdownDuration: 3
+  _recordingDuration: 15
+  _battleCountdownDuration: 3
   _arenaCamera: {fileID: 1476861557}
   _playerCamera: {fileID: 1879819366}
   _cinemachineBrain: {fileID: 330585548}

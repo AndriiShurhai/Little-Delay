@@ -1,17 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class Projectile : MonoBehaviour
 {
     [SerializeField] private float _lifetime = 5f;
+    [SerializeField] private float _knockbackForce = 10f;
 
     private float _damage;
     private Transform _ownerRoot;
     private Rigidbody _rigidbody;
-
-    private float force = 10f;
 
     private void Awake()
     {
@@ -35,20 +31,20 @@ public class Projectile : MonoBehaviour
         if (_ownerRoot != null && other.transform.IsChildOf(_ownerRoot))
             return;
 
-        if (other.TryGetComponent<PlayerController>(out var player))
+        if (other.TryGetComponent<PlayerController>(out var player) && player.IsInvincible)
         {
-            if (player.IsInvincible)
-            {
-                Debug.Log("Player is invincible right now");
-                return;
-            }
+            return;
         }
 
         if (other.TryGetComponent<HealthComponent>(out var health))
         {
-            Debug.Log("Projectile hit: " + other.name);
             health.TakeDamage(_damage);
-            Vector3 randomForce = new Vector3(UnityEngine.Random.Range(-force, force), UnityEngine.Random.Range(-force, force), UnityEngine.Random.Range(-force, force));
+
+            Vector3 randomForce = new Vector3(
+                Random.Range(-_knockbackForce, _knockbackForce),
+                Random.Range(-_knockbackForce, _knockbackForce),
+                Random.Range(-_knockbackForce, _knockbackForce));
+
             other.GetComponent<PlayerController>()?.ApplyDeflectionForce(randomForce);
         }
 

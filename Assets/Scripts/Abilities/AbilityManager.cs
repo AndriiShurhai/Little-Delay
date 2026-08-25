@@ -26,10 +26,6 @@ public class AbilityManager : MonoBehaviour
         if (_equippedAttack != null)
             _equippedAttack.Initialize(owner);
     }
-    private void Start()
-    {
-    }
-
     public void TryUseMobility(Vector3 direction)
     {
         _equippedMobility?.Execute(direction);

@@ -21,7 +21,7 @@ public abstract class BaseAbility : MonoBehaviour
     public float CooldownDuration => _cooldownTime;
     public float CooldownRemaining => CurrentCooldown;
     public float CooldownNormalized => _cooldownTime <= 0f ? 0f : Mathf.Clamp01(CurrentCooldown / _cooldownTime);
-    public bool IsReady => CurrentCooldown <= 0f; // was protected, just widen this
+    public bool IsReady => CurrentCooldown <= 0f;
 
     public void Initialize(ICharacterPhysics owner) => Owner = owner;
 

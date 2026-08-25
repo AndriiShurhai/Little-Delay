@@ -1,8 +1,5 @@
 ﻿using System;
-using Unity.VisualScripting;
 using UnityEngine;
-
-[DefaultExecutionOrder(-10)]
 public class InputPlayback : MonoBehaviour, IInputSource
 {
     public event Action OnFirePressed;

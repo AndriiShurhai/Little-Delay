@@ -75,18 +75,15 @@ public class InputRecorder : MonoBehaviour
         _isRecording = false;
         UnbindSource();
 
-
         float widthMoved = _maxX - _minX;
         float depthMoved = _maxZ - _minZ;
         bool failedAreaTest = (widthMoved < _passivityThreshold) && (depthMoved < _passivityThreshold);
 
         float totalRecordingDuration = _inputFrames.Count * Time.fixedDeltaTime;
-        float idlePercentage = _idleTime / totalRecordingDuration;
-        bool failedIdleTest = idlePercentage > _maxIdlePercentage;
+        bool failedIdleTest = totalRecordingDuration > 0f
+            && (_idleTime / totalRecordingDuration) > _maxIdlePercentage;
 
         bool isPassive = failedAreaTest || failedIdleTest;
-
-        Debug.Log($"Recording Results - Width: {widthMoved}, Depth: {depthMoved}, Idle Percentage: {idlePercentage}, Is Passive: {isPassive}");
 
         return new Recording(
             new List<FrameInput>(_inputFrames),

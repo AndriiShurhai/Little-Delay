@@ -47,10 +47,10 @@ public class BattleManager : MonoBehaviour
     [SerializeField] private Transform _spawnPointSecond;
 
     [Header("Phase Timing")]
-    [SerializeField] private readonly float _showdownPreviewDuration = 3f;
-    [SerializeField] private readonly float _countdownDuration = 3f;
-    [SerializeField] private readonly float _recordingDuration = 20f;
-    [SerializeField] private readonly float _battleCountdownDuration = 3f;
+    [SerializeField] private float _showdownPreviewDuration = 3f;
+    [SerializeField] private float _countdownDuration = 3f;
+    [SerializeField] private float _recordingDuration = 15f;
+    [SerializeField] private float _battleCountdownDuration = 3f;
 
     [Header("Cameras")]
     [Tooltip("The static overview camera for the battle phase")]
