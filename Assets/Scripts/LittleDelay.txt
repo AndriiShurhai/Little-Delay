@@ -1,0 +1,4240 @@
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Abilities\AbilitySlotUI.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace LittleDelay.Presentation
+{
+    public enum AbilitySlot { Mobility, Attack }
+
+    /// <summary>
+    /// One ability icon with a cooldown fill. Pull model: it samples SimAbility.NormalizedRemaining every frame
+    /// (the toolkit Cooldown's own progress), so there is no cooldown event wiring and no per-frame allocation.
+    /// Rebinds whenever a new SimWorld appears.
+    /// </summary>
+    public class AbilitySlotUI : MonoBehaviour
+    {
+        [SerializeField] private AbilitySlot _slot;
+        [SerializeField] private Image _icon;
+        [SerializeField] private Image _cooldownOverlay; // Image.Type.Filled
+        [SerializeField] private TMP_Text _keybindText;
+
+        [Header("Display (the simulation ability holds no art)")]
+        [SerializeField] private Sprite _iconSprite;
+        [SerializeField] private string _keybindLabel;
+
+        private SimAbility _bound;
+        private System.IDisposable _worldSub;
+
+        public void Initialize(IEventBus bus)
+        {
+            if (_iconSprite != null) _icon.sprite = _iconSprite;
+            if (_keybindText != null) _keybindText.text = _keybindLabel;
+            _cooldownOverlay.fillAmount = 0f;
+
+            _worldSub = bus.Subscribe<SimWorldCreatedEvent>(e =>
+            {
+                string id = _slot == AbilitySlot.Mobility ? SimDashAbility.Id : SimBlastAbility.Id;
+                e.World.Player.TryGetAbility(id, out _bound);
+            });
+        }
+
+        private void OnDestroy() => _worldSub?.Dispose();
+
+        private void Update()
+        {
+            if (_bound != null) _cooldownOverlay.fillAmount = _bound.NormalizedRemaining;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Battle System\FighterHealthBarUI.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Health bar for one fighter slot. Reads the starting value from the world when it appears and then follows
+    /// HealthChangedEvent. No references to fighter objects, ghosts or health components.
+    /// </summary>
+    public class FighterHealthBarUI : MonoBehaviour
+    {
+        [Tooltip("0 = Player, 1 = Opponent.")]
+        [SerializeField] private int _fighterId;
+
+        [SerializeField] private Image _fillImage;
+        [SerializeField] private CanvasGroup _canvasGroup;
+
+        private FighterSlot Slot => (FighterSlot)_fighterId;
+        private readonly System.Collections.Generic.List<System.IDisposable> _subs = new();
+
+        public void Initialize(IEventBus bus)
+        {
+            SetVisible(false);
+
+            _subs.Add(bus.Subscribe<SimWorldCreatedEvent>(e =>
+            {
+                var fighter = e.World.GetFighter(Slot);
+                SetFill(fighter.CurrentHealth, fighter.MaxHealth);
+                SetVisible(true);
+            }));
+            _subs.Add(bus.Subscribe<HealthChangedEvent>(e => { if (e.Fighter == Slot) SetFill(e.CurrentHealth, e.MaxHealth); }));
+        }
+
+        private void OnDestroy()
+        {
+            foreach (System.IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+
+        private void SetFill(float current, float max)
+        {
+            if (_fillImage != null) _fillImage.fillAmount = max > 0f ? current / max : 0f;
+        }
+
+        private void SetVisible(bool visible)
+        {
+            if (_canvasGroup != null) _canvasGroup.alpha = visible ? 1f : 0f;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Battle System\RevealVisualizer.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Draws the opponent's neon trail during a reveal window. Each simulation tick inside the window publishes a
+    /// RevealTrailPointEvent; this just appends it to a LineRenderer, then fades the line out once the window ends.
+    /// The window length itself (GDD: 2s) belongs to the simulation, not to this class.
+    /// </summary>
+    public class RevealVisualizer : MonoBehaviour
+    {
+        private enum VisualState { Hidden, Revealed, Fading }
+
+        [Header("Settings")]
+        [SerializeField] private float _fadeDuration = 1f;
+        [SerializeField] private Color _lineColor = new Color(0f, 0.8f, 1f);
+        [SerializeField] private float _lineWidth = 2f;
+
+        private static Material _lineMaterial;
+
+        private LineRenderer _line;
+        private VisualState _state = VisualState.Hidden;
+        private float _fadeElapsed;
+        private readonly Gradient _gradient = new();
+        private readonly GradientColorKey[] _colorKeys = new GradientColorKey[2];
+        private readonly GradientAlphaKey[] _alphaKeys = new GradientAlphaKey[2];
+        private readonly List<IDisposable> _subs = new();
+
+        public void Initialize(IEventBus bus)
+        {
+            _line = CreateLine("Enemy Trail");
+
+            _subs.Add(bus.Subscribe<RevealWindowStartedEvent>(e => { if (e.RevealedFighter == FighterSlot.Opponent) Begin(); }));
+            _subs.Add(bus.Subscribe<RevealTrailPointEvent>(e => { if (e.RevealedFighter == FighterSlot.Opponent && _state == VisualState.Revealed) Append(e.Position); }));
+            _subs.Add(bus.Subscribe<RevealWindowEndedEvent>(e => { if (e.RevealedFighter == FighterSlot.Opponent && _state == VisualState.Revealed) { _state = VisualState.Fading; _fadeElapsed = 0f; } }));
+            _subs.Add(bus.Subscribe<SimWorldRetiredEvent>(_ => ResetLine()));
+        }
+
+        private void OnDestroy()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+
+        private void Update()
+        {
+            if (_state != VisualState.Fading) return;
+
+            _fadeElapsed += Time.deltaTime;
+            if (_fadeElapsed >= _fadeDuration)
+            {
+                ResetLine();
+                return;
+            }
+
+            SetAlpha(1f - _fadeElapsed / _fadeDuration);
+        }
+
+        private void Begin()
+        {
+            _line.positionCount = 0;
+            _state = VisualState.Revealed;
+            SetAlpha(1f);
+        }
+
+        private void ResetLine()
+        {
+            _state = VisualState.Hidden;
+            if (_line != null) _line.positionCount = 0;
+        }
+
+        private void SetAlpha(float masterAlpha)
+        {
+            _colorKeys[0] = new GradientColorKey(_lineColor, 0f);
+            _colorKeys[1] = new GradientColorKey(_lineColor, 1f);
+            _alphaKeys[0] = new GradientAlphaKey(0f, 0f);
+            _alphaKeys[1] = new GradientAlphaKey(masterAlpha, 1f);
+            _gradient.SetKeys(_colorKeys, _alphaKeys);
+            _line.colorGradient = _gradient;
+        }
+
+        private void Append(Vector3 simPosition)
+        {
+            Vector3 target = simPosition + Vector3.up * 0.1f;
+
+            if (_line.positionCount > 0 && Vector3.Distance(_line.GetPosition(_line.positionCount - 1), target) < 0.05f) return;
+
+            _line.positionCount++;
+            _line.SetPosition(_line.positionCount - 1, target);
+        }
+
+        private LineRenderer CreateLine(string objectName)
+        {
+            if (_lineMaterial == null) _lineMaterial = new Material(Shader.Find("Sprites/Default"));
+
+            var go = new GameObject(objectName);
+            go.transform.SetParent(transform);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.material = _lineMaterial;
+            lr.numCapVertices = 5;
+            lr.numCornerVertices = 5;
+            lr.widthCurve = new AnimationCurve(new Keyframe(0f, 0f), new Keyframe(1f, _lineWidth));
+            lr.positionCount = 0;
+            return lr;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Battle System\SpawnIndicator.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>Shows a marker on the enemy's spawn point for the length of the pre-recording countdown (SpawnRevealedEvent).</summary>
+    public class SpawnIndicator : MonoBehaviour
+    {
+        [Tooltip("The actual visual object (e.g., a cylinder, sprite, or particle system)")]
+        [SerializeField] private GameObject _indicatorVisual;
+
+        private float _hideAt = -1f;
+        private readonly System.Collections.Generic.List<IDisposable> _subs = new();
+
+        public void Initialize(IEventBus bus)
+        {
+            _subs.Add(bus.Subscribe<SpawnRevealedEvent>(e => { if (e.Fighter == FighterSlot.Opponent) ShowIndicator(e.Position, e.Duration); }));
+            _subs.Add(bus.Subscribe<RecordingStartedEvent>(_ => HideIndicator()));
+            HideIndicator();
+        }
+
+        private void OnDestroy()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+
+        public void ShowIndicator(Vector3 position, float duration)
+        {
+            transform.position = position;
+            _hideAt = Time.unscaledTime + duration;
+            if (_indicatorVisual != null) _indicatorVisual.SetActive(true);
+        }
+
+        public void HideIndicator()
+        {
+            _hideAt = -1f;
+            if (_indicatorVisual != null) _indicatorVisual.SetActive(false);
+        }
+
+        private void Update()
+        {
+            if (_hideAt > 0f && Time.unscaledTime >= _hideAt) HideIndicator();
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Composition\GameCompositionRoot.cs ====================
+
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Audio;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.EventBus;
+using Drewio.UnityToolkit.Persistence;
+using Drewio.UnityToolkit.Scenes;
+using Drewio.UnityToolkit.Services;
+using Drewio.UnityToolkit.Timers;
+using LittleDelay.Presentation;
+using UnityEngine;
+using UnityEngine.Audio;
+
+namespace LittleDelay.Composition
+{
+    /// <summary>
+    /// Game-lifetime composition root. Lives on a GameObject in the very first scene loaded, survives scene loads
+    /// via DontDestroyOnLoad, and constructs each root-level toolkit service exactly once per process.
+    /// This is the only place allowed to create EventBus, TimerManager, SceneLoadingService, AudioPlaybackService
+    /// and SaveSystem. Scene-scoped roots resolve from <see cref="Services"/> once in their own Awake/Start and
+    /// pass dependencies down through constructors / Initialize calls.
+    /// </summary>
+    [DefaultExecutionOrder(-1000)] // the very first MonoBehaviour to Awake in the process
+    public class GameCompositionRoot : MonoBehaviour
+    {
+        [Header("Audio Banks")]
+        [Tooltip("Every music track referenced by name from anywhere in the project.")]
+        [SerializeField] private List<SoundDefinition> _musicDefinitions = new();
+
+        // Field name kept as-is (typo included) so existing serialized data in your scene is not lost.
+        [Tooltip("Every SFX referenced by name from anywhere in the project.")]
+        [SerializeField] private List<SoundDefinition> _sfxDefinisitons = new();
+
+        [SerializeField] private AudioMixerGroup _musicMixerGroup;
+        [SerializeField] private AudioMixerGroup _sfxMixerGroup;
+
+        [Header("Scene Transitions")]
+        [Tooltip("Optional. Fades in/out on SceneLoadStartedEvent / SceneLoadCompletedEvent.")]
+        [SerializeField] private ScreenFadeController _screenFade;
+
+        public static GameCompositionRoot Instance { get; private set; }
+
+        /// <summary>Root-level service registry. Nothing else should construct a second ServiceLocator.</summary>
+        public ServiceLocator Services { get; private set; }
+
+        private SceneLoadingService _sceneLoadingService;
+        private TimerManager _timerManager;
+        private AudioPlaybackService _audioService;
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            BuildServices();
+        }
+
+        private void BuildServices()
+        {
+            Services = new ServiceLocator();
+
+            var eventBus = new EventBus();
+            Services.Register<IEventBus>(eventBus);
+
+            _timerManager = new TimerManager();
+            Services.Register(_timerManager);
+
+            _sceneLoadingService = new SceneLoadingService(eventBus);
+            Services.Register(_sceneLoadingService);
+
+            var musicBank = new SoundBank(_musicDefinitions);
+            var sfxBank = new SoundBank(_sfxDefinisitons);
+            _audioService = new AudioPlaybackService(
+                eventBus,
+                musicBank,
+                sfxBank,
+                sourceContainer: transform,
+                musicMixerGroup: _musicMixerGroup,
+                sfxMixerGroup: _sfxMixerGroup);
+            Services.Register(_audioService);
+
+            Services.Register(new SaveSystem());
+
+            if (_screenFade != null) _screenFade.Initialize(eventBus);
+        }
+
+        private void Update()
+        {
+            // Drives load-progress events; the completion callback fires on its own.
+            _sceneLoadingService.Tick();
+            _timerManager.Tick(Time.deltaTime);
+            _audioService.Tick(Time.unscaledDeltaTime); // music fades must not freeze under the debug slow-motion toggle
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Composition\MatchCompositionRoot.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Audio;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.Scenes;
+using Drewio.UnityToolkit.Timers;
+using LittleDelay.Presentation;
+using LittleDelay.Simulation.AI;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Flow;
+using LittleDelay.Simulation.Reveal;
+using UnityEngine;
+
+namespace LittleDelay.Composition
+{
+    /// <summary>
+    /// Scene-scoped composition root for the arena scene. A fresh instance exists every time the scene loads, so
+    /// nothing match-scoped (the SimMatch, the state machine, the projectile pool) can leak between matches.
+    ///
+    /// It is the only class that wires simulation to presentation: it builds the pure-C# SimMatch and MatchFlow,
+    /// hands the event bus (and, where a view needs one, the tick clock) to every view, and drives the flow from
+    /// Update. Views never reference the simulation's owners and the simulation never references a view.
+    /// </summary>
+    public sealed class MatchCompositionRoot : MonoBehaviour
+    {
+        [Header("Simulation")]
+        [SerializeField] private SimMatchConfig _matchConfig = new();
+        [SerializeField] private SimAIConfig _aiConfig = new();
+
+        [Header("Arena Layout (scene markers; their positions and forward vectors become the sim spawns)")]
+        [SerializeField] private Transform _arenaCenter;
+        [SerializeField] private Transform _playerSpawn;
+        [SerializeField] private Transform _opponentSpawn;
+
+        [Header("Input / Camera")]
+        [SerializeField] private PlayerSimInputSource _playerInput;
+        [SerializeField] private CameraTargetController _cameraTarget;
+        [SerializeField] private CameraDirector _cameraDirector;
+
+        [Header("World Views")]
+        [SerializeField] private FighterView _playerView;
+        [SerializeField] private FighterView _opponentView;
+        [SerializeField] private ProjectileViewManager _projectileViews;
+        [SerializeField] private ArenaView _arenaView;
+        [SerializeField] private RevealVisualizer _revealVisualizer;
+        [SerializeField] private SpawnIndicator _spawnIndicator;
+
+        [Header("UI")]
+        [SerializeField] private BattleUIManager _battleHud;
+        [SerializeField] private GameOverScreenUI _gameOverScreen;
+        [SerializeField] private FighterHealthBarUI[] _healthBars;
+        [SerializeField] private AbilitySlotUI[] _abilitySlots;
+
+        [Header("Audio")]
+        [SerializeField] private MatchAudioCues _audioCues = new();
+
+        [Header("Scenes")]
+        [SerializeField] private string _mainMenuSceneName = "MainMenu";
+
+        public IEventBus EventBus { get; private set; }
+        public TimerManager TimerManager { get; private set; }
+        public SimMatch Match { get; private set; }
+        public MatchFlow Flow { get; private set; }
+        public SimTickClock Clock { get; private set; }
+
+        private SceneLoadingService _sceneLoading;
+        private AudioPlaybackService _audio;
+        private MatchAudioBinder _audioBinder;
+        private readonly List<IDisposable> _subs = new();
+        private bool _flowStarted;
+
+        private void Awake()
+        {
+            if (GameCompositionRoot.Instance == null)
+            {
+                Debug.LogError("[MatchCompositionRoot] No GameCompositionRoot found. Start play mode from the scene that contains it (usually MainMenu), or add one to this scene.");
+                enabled = false;
+                return;
+            }
+
+            var services = GameCompositionRoot.Instance.Services;
+            EventBus = services.Resolve<IEventBus>();
+            TimerManager = services.Resolve<TimerManager>();
+            _sceneLoading = services.Resolve<SceneLoadingService>();
+            _audio = services.Resolve<AudioPlaybackService>();
+        }
+
+        // Start (not Awake) so GameInput and every other scene object's Awake has already run.
+        private void Start()
+        {
+            Clock = new SimTickClock(_matchConfig.FixedDeltaTime);
+
+            var provider = new RecordingInputProvider(_playerInput, _aiConfig, _matchConfig);
+            Match = new SimMatch(
+                _matchConfig, EventBus, provider,
+                _arenaCenter.position,
+                new SimSpawn(_playerSpawn.position, _playerSpawn.forward),
+                new SimSpawn(_opponentSpawn.position, _opponentSpawn.forward));
+
+            Flow = new MatchFlow(Match, _matchConfig, EventBus, _cameraDirector, Clock);
+
+            WireViews();
+
+            _audioBinder = new MatchAudioBinder(EventBus, _audio, _audioCues);
+
+            _subs.Add(EventBus.Subscribe<RematchRequestedEvent>(_ => Flow.RequestRematch()));
+            _subs.Add(EventBus.Subscribe<QuitToMenuRequestedEvent>(_ => _sceneLoading.LoadScene(_mainMenuSceneName)));
+        }
+
+        private void WireViews()
+        {
+            _playerInput.Initialize(EventBus, GameInput.Instance);
+            _cameraTarget.Initialize(EventBus);
+
+            _playerView.Initialize(EventBus, Clock);
+            _opponentView.Initialize(EventBus, Clock);
+            _projectileViews.Initialize(EventBus, Clock);
+            _arenaView.Initialize(EventBus);
+            _revealVisualizer.Initialize(EventBus);
+            _spawnIndicator.Initialize(EventBus);
+
+            _battleHud.Initialize(EventBus, Match);
+            _gameOverScreen.Initialize(EventBus);
+            foreach (FighterHealthBarUI bar in _healthBars) bar.Initialize(EventBus);
+            foreach (AbilitySlotUI slot in _abilitySlots) slot.Initialize(EventBus);
+        }
+
+        private void Update()
+        {
+            // Starting the flow here (first Update) instead of in Start guarantees every view has finished its own Start.
+            if (!_flowStarted)
+            {
+                _flowStarted = true;
+                Flow.Start();
+            }
+
+            Flow.Tick(Time.deltaTime);
+        }
+
+        private void OnDestroy()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+            _audioBinder?.Dispose();
+        }
+
+        /// <summary>Player slot = live device input, opponent slot = the bot (reading only reveal-window intel).</summary>
+        private sealed class RecordingInputProvider : ISimRecordingInputProvider
+        {
+            private readonly PlayerSimInputSource _player;
+            private readonly SimAIConfig _ai;
+            private readonly SimMatchConfig _config;
+
+            public RecordingInputProvider(PlayerSimInputSource player, SimAIConfig ai, SimMatchConfig config)
+            {
+                _player = player;
+                _ai = ai;
+                _config = config;
+            }
+
+            public ISimInputSource CreateSource(FighterSlot slot, SimWorld world, ISimIntelSource intel)
+            {
+                return slot == FighterSlot.Player
+                    ? _player
+                    : new SimAIInputSource(world.Opponent, FighterSlot.Player, intel, _ai, _config);
+            }
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Debug\TimeController.cs ====================
+
+#if UNITY_EDITOR
+using UnityEngine;
+
+public class TimeController : MonoBehaviour
+{
+    // The default fixed timestep. Store it on start so it's always in sync
+    // with the Project Settings value rather than a hardcoded 0.02f.
+    private float defaultFixedTimestep;
+
+    private void Start()
+    {
+        defaultFixedTimestep = Time.fixedDeltaTime;
+    }
+
+    private void Update()
+    {
+        if (!Input.GetKeyDown(KeyCode.T)) return;
+
+        bool goingSlowMo = Time.timeScale >= 1f;
+
+        if (goingSlowMo)
+        {
+            Time.timeScale = 0.1f;
+            // Scale fixedDeltaTime to maintain physics determinism at reduced speed.
+            Time.fixedDeltaTime = defaultFixedTimestep * Time.timeScale;
+            Debug.Log("<color=yellow>[DEBUG] Slow Motion: ON</color>");
+        }
+        else
+        {
+            Time.timeScale = 1f;
+            Time.fixedDeltaTime = defaultFixedTimestep;
+            Debug.Log("<color=yellow>[DEBUG] Slow Motion: OFF</color>");
+        }
+    }
+}
+#endif
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Audio\MatchAudioBinder.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Audio;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Routes gameplay events to the toolkit AudioPlaybackService. Plain C# (no MonoBehaviour): the one place that
+    /// knows which event means which sound, so neither the simulation nor the views ever touch audio.
+    /// Created and disposed by MatchCompositionRoot.
+    /// </summary>
+    public sealed class MatchAudioBinder : IDisposable
+    {
+        private readonly AudioPlaybackService _audio;
+        private readonly MatchAudioCues _cues;
+        private readonly List<IDisposable> _subs = new();
+
+        public MatchAudioBinder(IEventBus bus, AudioPlaybackService audio, MatchAudioCues cues)
+        {
+            _audio = audio ?? throw new ArgumentNullException(nameof(audio));
+            _cues = cues ?? throw new ArgumentNullException(nameof(cues));
+
+            _subs.Add(bus.Subscribe<AbilityUsedEvent>(e => Play(e.AbilityId == SimDashAbility.Id ? _cues.DashUsed : _cues.BlastFired)));
+            _subs.Add(bus.Subscribe<AbilityFailedEvent>(e => { if (e.Fighter == FighterSlot.Player) Play(_cues.AbilityOnCooldown); }));
+            _subs.Add(bus.Subscribe<ProjectileDeflectedEvent>(_ => Play(_cues.ProjectileDeflected)));
+            _subs.Add(bus.Subscribe<FighterDamagedEvent>(e => { if (e.Source == DamageSource.Projectile) Play(_cues.FighterHit); }));
+            _subs.Add(bus.Subscribe<PassivityDetectedEvent>(_ => Play(_cues.PassivityWarning)));
+            _subs.Add(bus.Subscribe<FighterDiedEvent>(_ => Play(_cues.FighterDied)));
+            _subs.Add(bus.Subscribe<CountdownTickEvent>(_ => Play(_cues.CountdownTick)));
+            _subs.Add(bus.Subscribe<RecordingStartedEvent>(_ => Play(_cues.RecordingStarted)));
+            _subs.Add(bus.Subscribe<RecordingCompletedEvent>(_ => Play(_cues.RecordingSaved)));
+            _subs.Add(bus.Subscribe<BattleStartedEvent>(_ => Play(_cues.BattleStarted)));
+            _subs.Add(bus.Subscribe<MatchEndedEvent>(e => Play(e.Outcome == RoundOutcome.Draw ? _cues.MatchDrawn : _cues.MatchWon)));
+
+            _subs.Add(bus.Subscribe<MatchStartedEvent>(_ =>
+            {
+                if (!string.IsNullOrEmpty(_cues.MatchMusic) && _audio.CurrentMusicName != _cues.MatchMusic)
+                {
+                    _audio.PlayMusic(_cues.MatchMusic);
+                }
+            }));
+        }
+
+        private void Play(SoundGroup group)
+        {
+            if (group == null || group.IsEmpty) return;
+            _audio.PlaySfx(group.PickRandom());
+        }
+
+        public void Dispose()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Audio\MatchAudioCues.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Audio;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Which registered sound plays for which gameplay moment. Names refer to entries in the SFX/music
+    /// banks on GameCompositionRoot; an empty group simply plays nothing, so cues can be filled in over time.
+    /// </summary>
+    [Serializable]
+    public class MatchAudioCues
+    {
+        [Header("Abilities")]
+        public SoundGroup BlastFired;
+        public SoundGroup DashUsed;
+        public SoundGroup AbilityOnCooldown;
+
+        [Header("Combat")]
+        public SoundGroup ProjectileDeflected;
+        public SoundGroup FighterHit;
+        public SoundGroup PassivityWarning;
+        public SoundGroup FighterDied;
+
+        [Header("Match Flow")]
+        public SoundGroup CountdownTick;
+        public SoundGroup RecordingStarted;
+        public SoundGroup RecordingSaved;
+        public SoundGroup BattleStarted;
+        public SoundGroup MatchWon;
+        public SoundGroup MatchDrawn;
+
+        [Header("Music (registered music name, empty = none)")]
+        public string MatchMusic;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Cameras\CameraDirector.cs ====================
+
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Flow;
+using Unity.Cinemachine;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// The camera rig behind ICameraDirector. Same mechanism the old BattleManager used: the player
+    /// camera is switched on for the third-person view and off to fall back to the arena camera, and the
+    /// CinemachineBrain does the blend. The match flow only asks for a view and waits on IsBlending.
+    /// </summary>
+    public sealed class CameraDirector : MonoBehaviour, ICameraDirector
+    {
+        [SerializeField] private GameObject _arenaCamera;
+        [SerializeField] private GameObject _playerCamera;
+        [Tooltip("The CinemachineBrain on the Main Camera.")]
+        [SerializeField] private CinemachineBrain _cinemachineBrain;
+
+        public bool IsBlending => _cinemachineBrain != null && _cinemachineBrain.IsBlending;
+
+        public void ShowView(CameraView view)
+        {
+            if (_arenaCamera != null) _arenaCamera.SetActive(true);
+            if (_playerCamera != null) _playerCamera.SetActive(view == CameraView.Player);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Input\PlayerSimInputSource.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Turns live device input into one SimInputFrame per simulation tick. This is the ONLY place in the project
+    /// where raw input becomes gameplay input; the simulation never sees GameInput, cameras or screen space.
+    /// Movement is camera-relative (using the look yaw), aim is the look direction flattened onto the XZ plane.
+    /// Button presses are latched between ticks so a tap shorter than one tick (20 ms) is never lost.
+    /// It only listens while a recording is running; presses during countdowns are discarded.
+    /// </summary>
+    public sealed class PlayerSimInputSource : MonoBehaviour, ISimInputSource
+    {
+        [SerializeField] private CameraTargetController _look;
+
+        private GameInput _input;
+        private bool _recording;
+        private bool _firePressed;
+        private bool _dashPressed;
+        private System.IDisposable _startedSub;
+        private System.IDisposable _completedSub;
+
+        public void Initialize(IEventBus eventBus, GameInput input)
+        {
+            _input = input;
+            _startedSub = eventBus.Subscribe<RecordingStartedEvent>(_ => { _recording = true; _firePressed = false; _dashPressed = false; });
+            _completedSub = eventBus.Subscribe<RecordingCompletedEvent>(_ => _recording = false);
+
+            _input.OnFireAction += HandleFire;
+            _input.OnUseAbilityAction += HandleDash;
+        }
+
+        private void OnDestroy()
+        {
+            _startedSub?.Dispose();
+            _completedSub?.Dispose();
+
+            if (_input != null)
+            {
+                _input.OnFireAction -= HandleFire;
+                _input.OnUseAbilityAction -= HandleDash;
+            }
+        }
+
+        private void HandleFire() { if (_recording) _firePressed = true; }
+        private void HandleDash() { if (_recording) _dashPressed = true; }
+
+        public SimInputFrame GetInput(int tickIndex)
+        {
+            if (!_recording || _input == null) return SimInputFrame.None;
+
+            Quaternion yaw = Quaternion.Euler(0f, _look.Yaw, 0f);
+            Vector3 forward = yaw * Vector3.forward;
+            Vector3 right = yaw * Vector3.right;
+
+            Vector2 move2D = _input.GetMovementVectorNormalized();
+            Vector3 move = forward * move2D.y + right * move2D.x;
+
+            bool fire = _firePressed || _input.IsFireHeld();
+            bool dash = _dashPressed;
+            _firePressed = false;
+            _dashPressed = false;
+
+            return new SimInputFrame(move, forward, fire, dash);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Scenes\ScreenFadeController.cs ====================
+
+using System;
+using System.Collections;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.Scenes;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Project-owned copy of the toolkit's FadeScreenController sample (the sample lives in Samples~ and is
+    /// documented as "copy into your own project"). Fades a CanvasGroup in when SceneLoadingService starts a load
+    /// and out when it completes. Replaces the fade coroutines and GC.Collect() calls in the old SceneLoader.
+    /// </summary>
+    public sealed class ScreenFadeController : MonoBehaviour
+    {
+        [SerializeField] private CanvasGroup _fadeCanvas;
+        [SerializeField] private float _fadeDuration = 0.5f;
+        [SerializeField] private AnimationCurve _fadeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+        private IDisposable _startedSub, _completedSub;
+        private Coroutine _activeFade;
+
+        public void Initialize(IEventBus eventBus)
+        {
+            _startedSub = eventBus.Subscribe<SceneLoadStartedEvent>(_ => FadeTo(1f));
+            _completedSub = eventBus.Subscribe<SceneLoadCompletedEvent>(_ => FadeTo(0f));
+        }
+
+        private void OnDestroy()
+        {
+            _startedSub?.Dispose();
+            _completedSub?.Dispose();
+        }
+
+        private void FadeTo(float value)
+        {
+            if (_fadeCanvas == null) return;
+            if (_activeFade != null) StopCoroutine(_activeFade);
+            _activeFade = StartCoroutine(FadeRoutine(value));
+        }
+
+        private IEnumerator FadeRoutine(float value)
+        {
+            _fadeCanvas.blocksRaycasts = true;
+            float startAlpha = _fadeCanvas.alpha;
+            float elapsed = 0f;
+
+            while (elapsed < _fadeDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                _fadeCanvas.alpha = Mathf.Lerp(startAlpha, value, _fadeCurve.Evaluate(Mathf.Clamp01(elapsed / _fadeDuration)));
+                yield return null;
+            }
+
+            _fadeCanvas.alpha = value;
+            _fadeCanvas.blocksRaycasts = value > 0f;
+            _activeFade = null;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Views\ArenaView.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Shows the arena boundary at the simulation's current radius. The old ArenaController moved physical wall
+    /// rigidbodies; now the arena is a circle the simulation clamps against, and this only draws it. The shown
+    /// radius eases toward the real one so the round-to-round shrink animates instead of snapping.
+    /// Boundary visual: a ring/cylinder whose XZ scale of (baseDiameter) corresponds to a diameter of baseDiameter world units.
+    /// </summary>
+    public sealed class ArenaView : MonoBehaviour
+    {
+        [SerializeField] private Transform _boundary;
+        [Tooltip("World diameter the boundary object has at scale 1 (a default Unity cylinder is 1).")]
+        [SerializeField] private float _baseDiameter = 1f;
+        [SerializeField] private float _catchUpSpeed = 1f;
+
+        private SimWorld _world;
+        private float _shownRadius = -1f;
+        private System.IDisposable _createdSub;
+
+        public void Initialize(IEventBus eventBus)
+        {
+            _createdSub = eventBus.Subscribe<SimWorldCreatedEvent>(e =>
+            {
+                _world = e.World;
+                if (_shownRadius < 0f) _shownRadius = _world.ArenaRadius;
+                if (_boundary != null) _boundary.position = new Vector3(_world.ArenaCenter.x, _boundary.position.y, _world.ArenaCenter.z);
+            });
+        }
+
+        private void OnDestroy() => _createdSub?.Dispose();
+
+        private void Update()
+        {
+            if (_world == null || _boundary == null) return;
+
+            _shownRadius = Mathf.MoveTowards(_shownRadius, _world.ArenaRadius, _catchUpSpeed * Time.deltaTime);
+
+            float scale = _shownRadius * 2f / Mathf.Max(0.0001f, _baseDiameter);
+            Vector3 current = _boundary.localScale;
+            _boundary.localScale = new Vector3(scale, current.y, scale);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Views\FighterView.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Visual for one fighter. Reads SimFighter, never writes it: position and facing are interpolated between
+    /// the last two simulation ticks with SimTickClock.Alpha, so motion is smooth at any frame rate even though
+    /// the simulation only steps 50 times a second. No Rigidbody, no CharacterController, no physics.
+    /// The same view is reused for the recording world and the battle world; it just rebinds on SimWorldCreatedEvent.
+    /// </summary>
+    public sealed class FighterView : MonoBehaviour
+    {
+        [SerializeField] private FighterSlot _slot;
+        [Tooltip("Visual root toggled on death. Defaults to this GameObject.")]
+        [SerializeField] private GameObject _visualRoot;
+        [SerializeField] private float _hideDelayAfterDeath = 2f;
+
+        private SimTickClock _clock;
+        private SimWorld _world;
+        private SimFighter _fighter;
+        private float _hideAtTime = -1f;
+        private System.IDisposable _createdSub, _retiredSub, _diedSub;
+
+        public FighterSlot Slot => _slot;
+
+        public void Initialize(IEventBus eventBus, SimTickClock clock)
+        {
+            _clock = clock;
+            if (_visualRoot == null) _visualRoot = gameObject;
+
+            _createdSub = eventBus.Subscribe<SimWorldCreatedEvent>(e => Bind(e.World));
+            _retiredSub = eventBus.Subscribe<SimWorldRetiredEvent>(e => { if (e.World == _world) Unbind(); });
+            _diedSub = eventBus.Subscribe<FighterDiedEvent>(e => { if (e.Fighter == _slot) _hideAtTime = Time.time + _hideDelayAfterDeath; });
+
+            SetVisible(false);
+        }
+
+        private void OnDestroy()
+        {
+            _createdSub?.Dispose();
+            _retiredSub?.Dispose();
+            _diedSub?.Dispose();
+        }
+
+        private void Bind(SimWorld world)
+        {
+            _world = world;
+            _fighter = world.GetFighter(_slot);
+            _hideAtTime = -1f;
+
+            transform.SetPositionAndRotation(_fighter.Position, FacingOf(_fighter.AimDirection));
+            SetVisible(true);
+        }
+
+        private void Unbind()
+        {
+            _world = null;
+            _fighter = null;
+        }
+
+        private void LateUpdate()
+        {
+            if (_fighter == null) return;
+
+            if (_hideAtTime > 0f && Time.time >= _hideAtTime)
+            {
+                SetVisible(false);
+                _hideAtTime = -1f;
+            }
+
+            float alpha = _clock.Alpha;
+            Vector3 position = Vector3.Lerp(_fighter.PreviousPosition, _fighter.Position, alpha);
+            Vector3 aim = Vector3.Lerp(_fighter.PreviousAimDirection, _fighter.AimDirection, alpha);
+
+            transform.SetPositionAndRotation(position, FacingOf(aim));
+        }
+
+        private static Quaternion FacingOf(Vector3 aim)
+        {
+            aim.y = 0f;
+            return aim.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(aim.normalized, Vector3.up) : Quaternion.identity;
+        }
+
+        private void SetVisible(bool visible)
+        {
+            if (_visualRoot != null && _visualRoot.activeSelf != visible) _visualRoot.SetActive(visible);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Views\ProjectileView.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>Pooled visual for one SimProjectile. Pure display: it owns no velocity, no collider and no lifetime.</summary>
+    public sealed class ProjectileView : MonoBehaviour, IPoolable
+    {
+        [SerializeField] private TrailRenderer _trail;
+
+        public void PlaceAt(Vector3 position, Quaternion rotation)
+        {
+            transform.SetPositionAndRotation(position, rotation);
+            if (_trail != null) _trail.Clear(); // otherwise the trail streaks from wherever the pooled object last was
+        }
+
+        public void OnSpawned() { }
+
+        public void OnDespawned()
+        {
+            if (_trail != null) _trail.Clear();
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Presentation\Views\ProjectileViewManager.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.Pooling;
+using LittleDelay.Simulation.Combat;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Spawns and releases pooled ProjectileViews in response to simulation events and positions them every
+    /// frame from SimProjectile state. Replaces the old Projectile MonoBehaviour (Instantiate/Destroy, Rigidbody,
+    /// OnTriggerEnter, Random knockback): all of that is now SimCombat's job.
+    /// </summary>
+    public sealed class ProjectileViewManager : MonoBehaviour
+    {
+        [SerializeField] private ProjectileView _prefab;
+        [SerializeField] private Transform _poolRoot;
+        [SerializeField] private int _prewarmCount = 16;
+        [Tooltip("Lifts the visual (e.g. to chest height) without touching simulation positions.")]
+        [SerializeField] private float _heightOffset = 1f;
+
+        private readonly Dictionary<int, Entry> _active = new();
+        private readonly List<int> _scratch = new();
+        private GameObjectPool<ProjectileView> _pool;
+        private SimTickClock _clock;
+        private SimWorld _world;
+        private readonly List<IDisposable> _subs = new();
+
+        private struct Entry
+        {
+            public ProjectileView View;
+            public SimProjectile State;
+        }
+
+        public void Initialize(IEventBus eventBus, SimTickClock clock)
+        {
+            _clock = clock;
+            _pool = new GameObjectPool<ProjectileView>(_prefab, _poolRoot != null ? _poolRoot : transform, Mathf.Max(1, _prewarmCount));
+
+            _subs.Add(eventBus.Subscribe<SimWorldCreatedEvent>(e => { ReleaseAll(); _world = e.World; }));
+            _subs.Add(eventBus.Subscribe<SimWorldRetiredEvent>(e => { if (e.World == _world) { ReleaseAll(); _world = null; } }));
+            _subs.Add(eventBus.Subscribe<ProjectileSpawnedEvent>(HandleSpawned));
+            _subs.Add(eventBus.Subscribe<ProjectileDespawnedEvent>(e => Release(e.ProjectileId)));
+        }
+
+        private void OnDestroy()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+
+        private void HandleSpawned(ProjectileSpawnedEvent e)
+        {
+            if (_world == null) return;
+
+            SimProjectile state = null;
+            for (int i = 0; i < _world.Projectiles.Count; i++)
+            {
+                if (_world.Projectiles[i].Id == e.ProjectileId) { state = _world.Projectiles[i]; break; }
+            }
+            if (state == null) return;
+
+            ProjectileView view = _pool.Get();
+            view.PlaceAt(Visual(e.Position), Facing(e.Velocity));
+            _active[e.ProjectileId] = new Entry { View = view, State = state };
+        }
+
+        private void Release(int projectileId)
+        {
+            if (!_active.TryGetValue(projectileId, out Entry entry)) return;
+
+            _pool.Release(entry.View);
+            _active.Remove(projectileId);
+        }
+
+        private void ReleaseAll()
+        {
+            _scratch.Clear();
+            _scratch.AddRange(_active.Keys);
+            foreach (int id in _scratch) Release(id);
+        }
+
+        private void LateUpdate()
+        {
+            if (_active.Count == 0) return;
+
+            float alpha = _clock.Alpha;
+            foreach (Entry entry in _active.Values)
+            {
+                SimProjectile p = entry.State;
+                entry.View.transform.SetPositionAndRotation(
+                    Visual(Vector3.Lerp(p.PreviousPosition, p.Position, alpha)),
+                    Facing(p.Velocity));
+            }
+        }
+
+        private Vector3 Visual(Vector3 simPosition) => simPosition + Vector3.up * _heightOffset;
+
+        private static Quaternion Facing(Vector3 velocity) =>
+            velocity.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(velocity.normalized, Vector3.up) : Quaternion.identity;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Abilities\SimAbility.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.Timers;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+
+namespace LittleDelay.Simulation.Abilities
+{
+    /// <summary>
+    /// Pure C# ability (replaces the old BaseAbility MonoBehaviour): no Update(), no MonoBehaviour.
+    /// Cooldown tracking is the toolkit's Cooldown - pull-model NormalizedRemaining for UI, push-model
+    /// Ready event for one-shot cues - ticked explicitly by SimWorld inside the fixed-tick loop.
+    /// One instance per owning fighter, so cooldown state is never shared between the two fighters.
+    /// </summary>
+    public abstract class SimAbility
+    {
+        private readonly Cooldown _cooldown;
+        private readonly IEventBus _eventBus;
+
+        public FighterSlot OwnerSlot { get; }
+        public abstract string AbilityId { get; }
+
+        public bool IsReady => _cooldown.IsReady;
+
+        /// <summary>1 right after use, 0 once ready - sample every frame for a cooldown fill, no event wiring needed.</summary>
+        public float NormalizedRemaining => _cooldown.NormalizedRemaining;
+
+        public float CooldownDuration => _cooldown.Duration;
+
+        protected SimAbility(FighterSlot ownerSlot, IEventBus eventBus, float cooldownSeconds)
+        {
+            OwnerSlot = ownerSlot;
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _cooldown = new Cooldown(cooldownSeconds);
+            _cooldown.Ready += () => _eventBus.Publish(new AbilityReadyEvent(OwnerSlot, AbilityId));
+        }
+
+        public void Tick(float deltaTime) => _cooldown.Tick(deltaTime);
+
+        /// <summary>
+        /// Attempts to use the ability. On success: consumes the cooldown, runs the gameplay effect, and
+        /// publishes AbilityUsedEvent + AbilityCooldownStartedEvent. On failure: publishes AbilityFailedEvent
+        /// when reportFailure is set (SimWorld passes true only on the input's rising edge so a held button
+        /// does not spam the bus).
+        /// </summary>
+        public bool TryUse(SimFighter owner, SimWorld world, bool reportFailure = true)
+        {
+            if (!_cooldown.TryConsume())
+            {
+                if (reportFailure)
+                {
+                    _eventBus.Publish(new AbilityFailedEvent(OwnerSlot, AbilityId, AbilityFailureReason.OnCooldown));
+                }
+
+                return false;
+            }
+
+            OnUse(owner, world);
+
+            _eventBus.Publish(new AbilityUsedEvent(OwnerSlot, AbilityId));
+            _eventBus.Publish(new AbilityCooldownStartedEvent(OwnerSlot, AbilityId, _cooldown.Duration));
+            return true;
+        }
+
+        /// <summary>The actual gameplay effect.</summary>
+        protected abstract void OnUse(SimFighter owner, SimWorld world);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Abilities\SimBlastAbility.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Abilities
+{
+    /// <summary>
+    /// The prototype's single weapon: a small, high-fire-rate projectile along the fighter's aim
+    /// direction. No Instantiate anywhere - spawning goes through SimWorld.SpawnProjectile, which
+    /// publishes ProjectileSpawnedEvent for the view layer's pool.
+    /// </summary>
+    public sealed class SimBlastAbility : SimAbility
+    {
+        public const string Id = "Blast";
+        public override string AbilityId => Id;
+
+        private readonly SimMatchConfig _config;
+
+        public SimBlastAbility(FighterSlot ownerSlot, IEventBus eventBus, SimMatchConfig config)
+            : base(ownerSlot, eventBus, (config ?? throw new ArgumentNullException(nameof(config))).BlastAbilityCooldownSeconds)
+        {
+            _config = config;
+        }
+
+        protected override void OnUse(SimFighter owner, SimWorld world)
+        {
+            Vector3 spawnPosition = owner.Position + owner.AimDirection * _config.ProjectileSpawnOffset;
+            Vector3 velocity = owner.AimDirection * _config.ProjectileSpeed;
+            world.SpawnProjectile(owner.Slot, spawnPosition, velocity);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Abilities\SimDashAbility.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Abilities
+{
+    /// <summary>
+    /// The mobility slot (port of the old DashAbility): an impulse along the current move input - or the
+    /// aim direction when standing still - that decays linearly under SimFighter.TickDash.
+    /// </summary>
+    public sealed class SimDashAbility : SimAbility
+    {
+        public const string Id = "Dash";
+        public override string AbilityId => Id;
+
+        private readonly SimMatchConfig _config;
+
+        public SimDashAbility(FighterSlot ownerSlot, IEventBus eventBus, SimMatchConfig config)
+            : base(ownerSlot, eventBus, (config ?? throw new ArgumentNullException(nameof(config))).DashCooldownSeconds)
+        {
+            _config = config;
+        }
+
+        protected override void OnUse(SimFighter owner, SimWorld world)
+        {
+            Vector3 direction = owner.MoveInput.sqrMagnitude > 0.0001f ? owner.MoveInput.normalized : owner.AimDirection;
+            owner.ApplyDash(direction * _config.DashSpeed);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\AI\SimAIConfig.cs ====================
+
+using System;
+
+namespace LittleDelay.Simulation.AI
+{
+    /// <summary>Tuning for the recording-phase bot. Plain serializable class so tests can build one without Unity assets.</summary>
+    [Serializable]
+    public class SimAIConfig
+    {
+        public float EngageDistance = 9f;
+        public float RetreatDistance = 4f;
+        public float FireRange = 14f;
+        public float FireConeDegrees = 12f;
+        public float StrafeSwitchSeconds = 1.2f;
+        [UnityEngine.Range(0f, 1f)] public float StrafeStrength = 0.8f;
+        [UnityEngine.Tooltip("How far past the last reveal the bot will extrapolate the player's velocity.")]
+        public float PredictionHorizonSeconds = 1.5f;
+        public float DashIntervalSeconds = 3f;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\AI\SimAIInputSource.cs ====================
+
+using System;
+using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using LittleDelay.Simulation.Reveal;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.AI
+{
+    /// <summary>
+    /// Recording-phase bot. A pure function of (tick index, its own state, its intel): no Random, no clocks,
+    /// no engine types beyond Vector3, so the same inputs always produce the same SimInputFrame.
+    /// It does NOT read the opponent's live state - only what a reveal window showed it, extrapolated by the
+    /// last observed velocity. That is the same information a human gets, which is the whole premise of
+    /// recording "blind".
+    /// </summary>
+    public sealed class SimAIInputSource : ISimInputSource
+    {
+        private readonly SimFighter _self;
+        private readonly FighterSlot _targetSlot;
+        private readonly ISimIntelSource _intel;
+        private readonly SimAIConfig _ai;
+        private readonly float _dt;
+        private readonly int _strafeSwitchTicks;
+        private readonly int _dashIntervalTicks;
+
+        public SimAIInputSource(SimFighter self, FighterSlot targetSlot, ISimIntelSource intel, SimAIConfig ai, SimMatchConfig matchConfig)
+        {
+            _self = self ?? throw new ArgumentNullException(nameof(self));
+            _intel = intel ?? throw new ArgumentNullException(nameof(intel));
+            _ai = ai ?? throw new ArgumentNullException(nameof(ai));
+            if (matchConfig == null) throw new ArgumentNullException(nameof(matchConfig));
+
+            _targetSlot = targetSlot;
+            _dt = matchConfig.FixedDeltaTime;
+            _strafeSwitchTicks = Mathf.Max(1, Mathf.RoundToInt(ai.StrafeSwitchSeconds / _dt));
+            _dashIntervalTicks = Mathf.Max(1, Mathf.RoundToInt(ai.DashIntervalSeconds / _dt));
+        }
+
+        public SimInputFrame GetInput(int tickIndex)
+        {
+            SimIntel intel = _intel.GetIntelAbout(_targetSlot);
+            if (!intel.IsKnown) return SimInputFrame.None;
+
+            float ageSeconds = Mathf.Min(Mathf.Max(0, tickIndex - intel.ObservedTick) * _dt, _ai.PredictionHorizonSeconds);
+            Vector3 predicted = intel.Position + intel.Velocity * ageSeconds;
+
+            Vector3 toTarget = predicted - _self.Position;
+            toTarget.y = 0f;
+            float distance = toTarget.magnitude;
+            if (distance < 0.0001f) return SimInputFrame.None;
+
+            Vector3 aim = toTarget / distance;
+
+            float radial = distance > _ai.EngageDistance ? 1f : (distance < _ai.RetreatDistance ? -1f : 0f);
+            float strafeSign = (tickIndex / _strafeSwitchTicks) % 2 == 0 ? 1f : -1f;
+            Vector3 strafe = Vector3.Cross(Vector3.up, aim) * (strafeSign * _ai.StrafeStrength);
+            Vector3 move = SimMovement.ClampMoveInput(aim * radial + strafe);
+
+            bool fire = distance <= _ai.FireRange
+                        && Vector3.Angle(_self.AimDirection, aim) <= _ai.FireConeDegrees
+                        && IsReady(SimBlastAbility.Id);
+
+            bool dash = tickIndex > 0
+                        && tickIndex % _dashIntervalTicks == 0
+                        && distance > _ai.EngageDistance * 1.5f
+                        && IsReady(SimDashAbility.Id);
+
+            return new SimInputFrame(move, aim, fire, dash);
+        }
+
+        private bool IsReady(string abilityId) => _self.TryGetAbility(abilityId, out SimAbility ability) && ability.IsReady;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Combat\SimCombat.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Combat
+{
+    /// <summary>
+    /// All projectile movement, collision and damage resolution. Replaces per-projectile physics
+    /// trigger callbacks with swept distance checks run centrally, once per tick, in a fixed order -
+    /// the same projectile list in the same order always resolves the same way, unlike physics-engine
+    /// callback ordering. Collision tests are swept (segment vs sphere) so a fast projectile cannot
+    /// tunnel through a target between two ticks.
+    /// </summary>
+    public sealed class SimCombat
+    {
+        private readonly SimMatchConfig _config;
+        private readonly IEventBus _eventBus;
+
+        public SimCombat(SimMatchConfig config, IEventBus eventBus)
+        {
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        }
+
+        /// <summary>Integrates position and expires anything that has outlived ProjectileLifeTimeSeconds.</summary>
+        public void AdvanceProjectiles(List<SimProjectile> projectiles, float deltaTime)
+        {
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SimProjectile projectile = projectiles[i];
+                if (projectile.IsExpired) continue;
+
+                projectile.PreviousPosition = projectile.Position;
+                projectile.Position += projectile.Velocity * deltaTime;
+                projectile.ElapsedSeconds += deltaTime;
+
+                if (projectile.ElapsedSeconds >= _config.ProjectileLifeTimeSeconds)
+                {
+                    projectile.IsExpired = true;
+                    _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.Expired));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Opposing projectiles that touch during a tick bounce off each other (vector reflection about the
+        /// contact normal). Swept relative-motion test, resolved at the moment of closest approach, and only
+        /// while the pair is actually closing - so a pair that has just bounced can never re-trigger.
+        /// </summary>
+        public void ResolveProjectileProjectileCollisions(List<SimProjectile> projectiles, float deltaTime)
+        {
+            float combinedRadius = _config.ProjectileRadius * 2f;
+            float combinedRadiusSq = combinedRadius * combinedRadius;
+
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SimProjectile a = projectiles[i];
+                if (a.IsExpired) continue;
+
+                for (int j = i + 1; j < projectiles.Count; j++)
+                {
+                    SimProjectile b = projectiles[j];
+                    if (b.IsExpired || b.Owner == a.Owner) continue;
+
+                    Vector3 relativeStart = b.PreviousPosition - a.PreviousPosition;
+                    Vector3 relativeVelocity = b.Velocity - a.Velocity;
+
+                    // Only a pair that is actually approaching can collide. Judged from the relative position at the
+                    // START of the tick, so a pair that just bounced (coincident or separating) can never re-trigger.
+                    if (Vector3.Dot(relativeStart, relativeVelocity) >= 0f) continue;
+
+                    Vector3 relativeEnd = b.Position - a.Position;
+                    float t = ClosestApproachFraction(relativeStart, relativeEnd, out float closestDistanceSq);
+                    if (closestDistanceSq > combinedRadiusSq) continue;
+
+                    Vector3 contactA = Vector3.Lerp(a.PreviousPosition, a.Position, t);
+                    Vector3 contactB = Vector3.Lerp(b.PreviousPosition, b.Position, t);
+
+                    // Normal points a -> b. Exactly head-on projectiles are coincident at closest approach,
+                    // so fall back to the approach direction (non-zero, because they are closing).
+                    Vector3 delta = contactB - contactA;
+                    Vector3 normal = delta.sqrMagnitude > 0.000001f ? delta.normalized : relativeStart.normalized;
+
+                    Vector3 newVelocityA = ComputeDeflection(a.Velocity, normal);
+                    Vector3 newVelocityB = ComputeDeflection(b.Velocity, normal);
+                    float remaining = (1f - t) * deltaTime;
+
+                    a.PreviousPosition = contactA;
+                    b.PreviousPosition = contactB;
+                    a.Velocity = newVelocityA;
+                    b.Velocity = newVelocityB;
+                    a.Position = contactA + newVelocityA * remaining;
+                    b.Position = contactB + newVelocityB * remaining;
+
+                    _eventBus.Publish(new ProjectileDeflectedEvent(a.Id, newVelocityA));
+                    _eventBus.Publish(new ProjectileDeflectedEvent(b.Id, newVelocityB));
+                }
+            }
+        }
+
+        /// <summary>A projectile only damages the fighter it wasn't fired by - each fighter has exactly one opponent.</summary>
+        public void ResolveProjectileFighterCollisions(List<SimProjectile> projectiles, SimFighter player, SimFighter opponent)
+        {
+            float hitDistance = _config.ProjectileRadius + _config.FighterHurtboxRadius;
+            float hitDistanceSq = hitDistance * hitDistance;
+
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SimProjectile projectile = projectiles[i];
+                if (projectile.IsExpired) continue;
+
+                SimFighter target = projectile.Owner == FighterSlot.Player ? opponent : player;
+                if (!target.IsAlive) continue;
+
+                Vector3 relativeStart = projectile.PreviousPosition - target.Position;
+                Vector3 relativeEnd = projectile.Position - target.Position;
+                ClosestApproachFraction(relativeStart, relativeEnd, out float closestDistanceSq);
+                if (closestDistanceSq > hitDistanceSq) continue;
+
+                ApplyDamage(target, _config.ProjectileDamage, DamageSource.Projectile);
+
+                // Knockback along the projectile's travel direction, additive on top of whatever input the
+                // target's recording is playing - once it ends the recording simply continues from the pushed position.
+                Vector3 travel = projectile.Velocity;
+                travel.y = 0f;
+                Vector3 knockbackDirection = travel.sqrMagnitude > 0.0001f
+                    ? travel.normalized
+                    : (target.Position - projectile.Position).normalized;
+                target.ApplyDeflection(knockbackDirection * _config.DeflectionKnockbackSpeed, _config.DeflectionDurationSeconds);
+
+                projectile.IsExpired = true;
+                _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.HitFighter));
+            }
+        }
+
+        public void ResolveArenaBoundsForProjectiles(List<SimProjectile> projectiles, Vector3 arenaCenter, float arenaRadius)
+        {
+            float boundsRadius = arenaRadius + _config.ProjectileArenaExitMargin;
+            float boundsRadiusSq = boundsRadius * boundsRadius;
+
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SimProjectile projectile = projectiles[i];
+                if (projectile.IsExpired) continue;
+
+                Vector3 offset = projectile.Position - arenaCenter;
+                offset.y = 0f;
+                if (offset.sqrMagnitude <= boundsRadiusSq) continue;
+
+                projectile.IsExpired = true;
+                _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.HitArenaBounds));
+            }
+        }
+
+        /// <summary>Standard vector reflection - deterministic given the same inputs, with no random component.</summary>
+        public static Vector3 ComputeDeflection(Vector3 incomingVelocity, Vector3 collisionNormal)
+        {
+            Vector3 normal = collisionNormal.sqrMagnitude > 0.0001f
+                ? collisionNormal.normalized
+                : -incomingVelocity.normalized;
+
+            return Vector3.Reflect(incomingVelocity, normal);
+        }
+
+        /// <summary>
+        /// Applies damage and publishes the full event sequence (FighterDamagedEvent, HealthChangedEvent,
+        /// then FighterDiedEvent if lethal). Used for projectile hits and passivity damage alike, so every
+        /// damage path stays consistent through this one method.
+        /// </summary>
+        public void ApplyDamage(SimFighter target, float amount, DamageSource source)
+        {
+            if (!target.IsAlive) return;
+
+            target.ReduceHealth(amount);
+
+            _eventBus.Publish(new FighterDamagedEvent(target.Slot, amount, source));
+            _eventBus.Publish(new HealthChangedEvent(target.Slot, target.CurrentHealth, target.MaxHealth));
+
+            if (!target.IsAlive)
+            {
+                _eventBus.Publish(new FighterDiedEvent(target.Slot, source));
+            }
+        }
+
+        /// <summary>Fraction t in [0,1] along the segment start->end at which the point is closest to the origin.</summary>
+        private static float ClosestApproachFraction(Vector3 start, Vector3 end, out float closestDistanceSq)
+        {
+            Vector3 direction = end - start;
+            float lengthSq = direction.sqrMagnitude;
+            float t = lengthSq > 0.00000001f ? Mathf.Clamp01(-Vector3.Dot(start, direction) / lengthSq) : 0f;
+            closestDistanceSq = (start + direction * t).sqrMagnitude;
+            return t;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Combat\SimProjectile.cs ====================
+
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Combat
+{
+    /// <summary>
+    /// Engine-agnostic projectile state. No Rigidbody, no OnTriggerEnter - SimCombat moves and
+    /// collision-tests these directly. Views read Position/PreviousPosition to place a pooled
+    /// visual; they never mutate this.
+    /// </summary>
+    public sealed class SimProjectile
+    {
+        public int Id { get; }
+        public FighterSlot Owner { get; }
+
+        public Vector3 Position { get; internal set; }
+        public Vector3 PreviousPosition { get; internal set; }
+        public Vector3 Velocity { get; internal set; }
+        public float ElapsedSeconds { get; internal set; }
+        public bool IsExpired { get; internal set; }
+
+        public SimProjectile(int id, FighterSlot owner, Vector3 position, Vector3 velocity)
+        {
+            Id = id;
+            Owner = owner;
+            Position = position;
+            PreviousPosition = position;
+            Velocity = velocity;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\ISimInputSource.cs ====================
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// A per-tick source of SimInputFrame - the single contract the round runner
+    /// pulls from whether the frame comes from a played-back recording, the AI or
+    /// live device input. SimWorld itself never sees this interface; it only takes
+    /// the two resulting frames.
+    /// </summary>
+    public interface ISimInputSource
+    {
+        /// <summary>
+        /// tickIndex is the number of ticks already completed in the world being
+        /// driven (0, 1, 2, ...). Recording frame N lines up with playback tick N
+        /// because both are driven by SimRoundRunner, one call per world tick.
+        /// May have side effects (a live source consumes its input latches).
+        /// </summary>
+        SimInputFrame GetInput(int tickIndex);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimInputFrame.cs ====================
+
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// One tick's worth of gameplay input for a single fighter. Live player input,
+    /// AI decisions and recorded playback all resolve to a stream of these before
+    /// reaching SimWorld, so SimWorld never knows (or cares) which one produced a frame.
+    /// MoveDirection and AimDirection are separate (aim-facing/strafe model).
+    /// </summary>
+    public readonly struct SimInputFrame
+    {
+        /// <summary>XZ-plane direction, magnitude expected in [0, 1]; SimMovement clamps if it isn't.</summary>
+        public readonly Vector3 MoveDirection;
+
+        /// <summary>XZ-plane facing/aim direction. Zero means "keep the fighter's current aim".</summary>
+        public readonly Vector3 AimDirection;
+
+        /// <summary>Level-triggered ("fire is wanted this tick"), not edge-triggered - a held button is true every tick.</summary>
+        public readonly bool FirePrimary;
+
+        /// <summary>Level-triggered request for the mobility ability (dash).</summary>
+        public readonly bool UseMobility;
+
+        public SimInputFrame(Vector3 moveDirection, Vector3 aimDirection, bool firePrimary, bool useMobility = false)
+        {
+            MoveDirection = moveDirection;
+            AimDirection = aimDirection;
+            FirePrimary = firePrimary;
+            UseMobility = useMobility;
+        }
+
+        /// <summary>No movement, no input, no facing change - a fighter that did nothing this tick.</summary>
+        public static readonly SimInputFrame None = default;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimMatchConfig.cs ====================
+
+using System;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// Every tunable constant the simulation needs, in one place. Plain [Serializable]
+    /// class (not a ScriptableObject) so it stays usable from EditMode tests; a
+    /// Presentation-side ScriptableObject can wrap one in a [SerializeField].
+    /// </summary>
+    [Serializable]
+    public class SimMatchConfig
+    {
+        [Header("Simulation")]
+        [Tooltip("Fixed simulation rate. Changing this changes every per-tick quantity, including recordings made at the old rate.")]
+        public int TicksPerSecond = 50;
+
+        [Header("Match")]
+        public int MaxRounds = 3;
+        [Tooltip("GDD v0.1 decided 20s.")]
+        public float RecordingDurationSeconds = 20f;
+        [Tooltip("Health left at the end of a round that ends with no kill carries into the next round.")]
+        public bool CarryHealthBetweenRounds = true;
+
+        [Header("Phase Timing (seconds)")]
+        public float ShowdownPreviewSeconds = 3f;
+        public float PreRecordingCountdownSeconds = 3f;
+        public float PreBattleCountdownSeconds = 3f;
+        [Tooltip("Pause on the result of a round before the next round / game-over screen.")]
+        public float RoundResolveSeconds = 1.5f;
+
+        [Header("Fighter")]
+        public float MaxHealth = 100f;
+        public float FighterMoveSpeed = 6f;
+        public float FighterHurtboxRadius = 0.5f;
+
+        [Header("Blast Ability")]
+        public float BlastAbilityCooldownSeconds = 0.5f;
+        public float ProjectileSpeed = 20f;
+        public float ProjectileRadius = 0.15f;
+        public float ProjectileDamage = 8f;
+        public float ProjectileLifeTimeSeconds = 3f;
+        public float ProjectileSpawnOffset = 0.6f;
+        public float ProjectileArenaExitMargin = 2f;
+
+        [Header("Dash Ability")]
+        public float DashCooldownSeconds = 2f;
+        [Tooltip("Initial dash speed; decays linearly. Travel distance is roughly speed^2 / (2 * friction).")]
+        public float DashSpeed = 18f;
+        public float DashFrictionPerSecond = 60f;
+
+        [Header("Arena")]
+        public float ArenaInitialRadius = 15f;
+        public float ArenaMinRadius = 4f;
+        [Tooltip("Radius lost at the start of each round after the first (replaces the old between-rounds wall move).")]
+        public float ArenaShrinkPerRound = 2f;
+        [Tooltip("Extra shrink while a battle is running. Set both shrink values to taste.")]
+        public float ArenaShrinkRatePerSecond = 0.15f;
+
+        [Header("Deflection / Knockback")]
+        public float DeflectionKnockbackSpeed = 3f;
+        public float DeflectionDurationSeconds = 0.35f;
+
+        [Header("Passivity")]
+        public float PassivityCheckIntervalSeconds = 4f;
+        public float PassivityMinTravelDistance = 1.5f;
+        public float PassivityDamage = 5f;
+
+        [Header("Reveals")]
+        public int RevealsPerRecording = 3;
+        public float RevealIntervalSeconds = 7f;
+        public float RevealDurationSeconds = 2f;
+
+        public float FixedDeltaTime => 1f / TicksPerSecond;
+        public int RecordingTicks => Mathf.RoundToInt(RecordingDurationSeconds * TicksPerSecond);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimSpawn.cs ====================
+
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>Where a fighter starts a round and which way it faces.</summary>
+    public readonly struct SimSpawn
+    {
+        public readonly Vector3 Position;
+        public readonly Vector3 AimDirection;
+
+        public SimSpawn(Vector3 position, Vector3 aimDirection)
+        {
+            Position = position;
+            AimDirection = aimDirection;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimTickClock.cs ====================
+
+using System;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// Fixed-step accumulator. The simulation advances in whole ticks of
+    /// FixedDeltaTime regardless of frame rate; Alpha (0..1) is how far the
+    /// renderer currently is between the last two ticks, for view interpolation.
+    /// Deliberately independent of Unity's Time.fixedDeltaTime so physics settings
+    /// can never change simulation cadence.
+    /// </summary>
+    public sealed class SimTickClock
+    {
+        private readonly int _maxStepsPerAdvance;
+        private float _accumulator;
+
+        public float FixedDeltaTime { get; }
+
+        /// <summary>1 when frozen/idle (views show the latest tick), otherwise the fraction of the next tick already elapsed.</summary>
+        public float Alpha { get; private set; } = 1f;
+
+        public SimTickClock(float fixedDeltaTime, int maxStepsPerAdvance = 5)
+        {
+            if (fixedDeltaTime <= 0f) throw new ArgumentOutOfRangeException(nameof(fixedDeltaTime));
+            if (maxStepsPerAdvance < 1) throw new ArgumentOutOfRangeException(nameof(maxStepsPerAdvance));
+            FixedDeltaTime = fixedDeltaTime;
+            _maxStepsPerAdvance = maxStepsPerAdvance;
+        }
+
+        /// <summary>
+        /// Accumulates frame time and runs step() once per whole tick owed.
+        /// step returns false once the thing being driven is finished, which stops
+        /// the loop early. If a frame owes more than maxStepsPerAdvance ticks the
+        /// backlog is dropped rather than spiralling. Returns ticks executed.
+        /// </summary>
+        public int Advance(float frameDeltaTime, Func<bool> step)
+        {
+            if (step == null) throw new ArgumentNullException(nameof(step));
+
+            _accumulator += Mathf.Max(0f, frameDeltaTime);
+            int steps = 0;
+
+            while (_accumulator >= FixedDeltaTime && steps < _maxStepsPerAdvance)
+            {
+                _accumulator -= FixedDeltaTime;
+                steps++;
+
+                if (!step())
+                {
+                    Freeze();
+                    return steps;
+                }
+            }
+
+            if (steps == _maxStepsPerAdvance) _accumulator = 0f;
+
+            Alpha = Mathf.Clamp01(_accumulator / FixedDeltaTime);
+            return steps;
+        }
+
+        /// <summary>Drops any partial tick and pins Alpha to 1 so views settle on the latest simulated state.</summary>
+        public void Freeze()
+        {
+            _accumulator = 0f;
+            Alpha = 1f;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimWorld.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Combat;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// The whole game state for one round phase (recording rehearsal OR battle). Advanced only by Tick():
+    /// no Update(), no Time.*, no UnityEngine.Random, no scene objects. Given the same config, spawns,
+    /// start health and the same sequence of input frames, it produces the same result every time -
+    /// that is what makes recordings replayable and what the determinism tests assert.
+    /// </summary>
+    public sealed class SimWorld
+    {
+        private readonly SimMatchConfig _config;
+        private readonly IEventBus _eventBus;
+        private readonly SimCombat _combat;
+        private readonly List<SimProjectile> _projectiles = new();
+        private int _nextProjectileId = 1;
+
+        public SimWorldMode Mode { get; }
+        public int RoundNumber { get; }
+        public Vector3 ArenaCenter { get; }
+        public float ArenaRadius { get; private set; }
+
+        public SimFighter Player { get; }
+        public SimFighter Opponent { get; }
+
+        /// <summary>Live projectiles only - expired ones are removed at the end of the tick that expired them.</summary>
+        public IReadOnlyList<SimProjectile> Projectiles => _projectiles;
+
+        /// <summary>Ticks completed. During a Tick call this is the index of the tick being run, until it finishes.</summary>
+        public int TickCount { get; private set; }
+
+        public float ElapsedSeconds => TickCount * _config.FixedDeltaTime;
+
+        /// <summary>Battle only: set the tick a fighter dies. Null while the round is still running.</summary>
+        public RoundOutcome? Outcome { get; private set; }
+        public bool IsEnded => Outcome.HasValue;
+
+        /// <summary>Lets the runner stop punishing inactivity once both recordings have run out and only projectiles are left flying.</summary>
+        public bool PassivityEnabled { get; set; } = true;
+
+        public SimWorld(
+            SimMatchConfig config,
+            IEventBus eventBus,
+            SimWorldMode mode,
+            int roundNumber,
+            Vector3 arenaCenter,
+            SimSpawn playerSpawn,
+            SimSpawn opponentSpawn,
+            float playerStartHealth = -1f,
+            float opponentStartHealth = -1f)
+        {
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _combat = new SimCombat(config, eventBus);
+
+            Mode = mode;
+            RoundNumber = roundNumber;
+            ArenaCenter = arenaCenter;
+            ArenaRadius = SimMovement.ComputeRoundStartRadius(config, roundNumber);
+
+            Player = CreateFighter(FighterSlot.Player, playerSpawn, playerStartHealth);
+            Opponent = CreateFighter(FighterSlot.Opponent, opponentSpawn, opponentStartHealth);
+        }
+
+        private SimFighter CreateFighter(FighterSlot slot, SimSpawn spawn, float startHealth)
+        {
+            Vector3 position = SimMovement.ClampToArena(spawn.Position, ArenaCenter, ArenaRadius);
+            var fighter = new SimFighter(slot, position, spawn.AimDirection, _config.MaxHealth, startHealth);
+            fighter.AddAbility(new SimBlastAbility(slot, _eventBus, _config));
+            fighter.AddAbility(new SimDashAbility(slot, _eventBus, _config));
+            return fighter;
+        }
+
+        public SimFighter GetFighter(FighterSlot slot) => slot == FighterSlot.Player ? Player : Opponent;
+
+        /// <summary>Called by SimBlastAbility. Publishes ProjectileSpawnedEvent so the view layer can pull a pooled visual.</summary>
+        internal void SpawnProjectile(FighterSlot owner, Vector3 position, Vector3 velocity)
+        {
+            var projectile = new SimProjectile(_nextProjectileId++, owner, position, velocity);
+            _projectiles.Add(projectile);
+            _eventBus.Publish(new ProjectileSpawnedEvent(projectile.Id, owner, position, velocity));
+        }
+
+        /// <summary>
+        /// Advances one fixed step. Order is part of the contract and never varies:
+        /// fighters (Player, then Opponent) -> projectile movement -> projectile/projectile bounce ->
+        /// projectile/fighter hits (Battle only) -> arena bounds -> passivity (Battle only) -> cleanup -> outcome.
+        /// </summary>
+        public void Tick(SimInputFrame playerInput, SimInputFrame opponentInput)
+        {
+            if (IsEnded) return;
+
+            float dt = _config.FixedDeltaTime;
+
+            ArenaRadius = Mode == SimWorldMode.Battle
+                ? SimMovement.ComputeBattleRadius(_config, RoundNumber, ElapsedSeconds)
+                : SimMovement.ComputeRoundStartRadius(_config, RoundNumber);
+
+            Player.BeginTick();
+            Opponent.BeginTick();
+
+            TickFighter(Player, playerInput, dt, out float playerDistance, out bool playerActed);
+            TickFighter(Opponent, opponentInput, dt, out float opponentDistance, out bool opponentActed);
+
+            _combat.AdvanceProjectiles(_projectiles, dt);
+            _combat.ResolveProjectileProjectileCollisions(_projectiles, dt);
+
+            if (Mode == SimWorldMode.Battle)
+            {
+                _combat.ResolveProjectileFighterCollisions(_projectiles, Player, Opponent);
+            }
+
+            _combat.ResolveArenaBoundsForProjectiles(_projectiles, ArenaCenter, ArenaRadius);
+
+            if (Mode == SimWorldMode.Battle && PassivityEnabled)
+            {
+                TickPassivity(Player, playerDistance, playerActed, dt);
+                TickPassivity(Opponent, opponentDistance, opponentActed, dt);
+            }
+
+            _projectiles.RemoveAll(p => p.IsExpired);
+            TickCount++;
+
+            if (Mode == SimWorldMode.Battle)
+            {
+                EvaluateOutcome();
+            }
+        }
+
+        private void TickFighter(SimFighter fighter, SimInputFrame input, float dt, out float chosenDistance, out bool actionTaken)
+        {
+            Vector3 move = SimMovement.ClampMoveInput(input.MoveDirection);
+            fighter.SetInput(move, input.AimDirection);
+
+            for (int i = 0; i < fighter.Abilities.Count; i++)
+            {
+                fighter.Abilities[i].Tick(dt);
+            }
+
+            fighter.TickDeflection(dt);
+            fighter.TickDash(dt, _config.DashFrictionPerSecond);
+
+            actionTaken = false;
+
+            if (fighter.TryGetAbility(SimDashAbility.Id, out SimAbility dash))
+            {
+                if (input.UseMobility)
+                {
+                    actionTaken |= dash.TryUse(fighter, this, reportFailure: !fighter.MobilityWasRequested);
+                }
+                fighter.MobilityWasRequested = input.UseMobility;
+            }
+
+            if (fighter.TryGetAbility(SimBlastAbility.Id, out SimAbility blast))
+            {
+                if (input.FirePrimary)
+                {
+                    actionTaken |= blast.TryUse(fighter, this, reportFailure: !fighter.FireWasRequested);
+                }
+                fighter.FireWasRequested = input.FirePrimary;
+            }
+
+            // Dash is a chosen movement; knockback is not. Passivity only counts the former.
+            Vector3 chosenVelocity = SimMovement.ComputeVelocity(move, _config) + fighter.DashVelocity;
+            Vector3 totalVelocity = chosenVelocity + fighter.DeflectionVelocity;
+
+            Vector3 next = SimMovement.Integrate(fighter.Position, totalVelocity, dt);
+            next = SimMovement.ClampToArena(next, ArenaCenter, ArenaRadius);
+
+            fighter.SetMotion(next, totalVelocity);
+            chosenDistance = chosenVelocity.magnitude * dt;
+        }
+
+        private void TickPassivity(SimFighter fighter, float distanceThisTick, bool actedThisTick, float dt)
+        {
+            if (!fighter.IsAlive) return;
+
+            if (!fighter.PassivityTracker.Update(distanceThisTick, actedThisTick, dt, _config, out bool isPassive) || !isPassive)
+            {
+                return;
+            }
+
+            _eventBus.Publish(new PassivityDetectedEvent(fighter.Slot));
+            _combat.ApplyDamage(fighter, _config.PassivityDamage, DamageSource.Passivity);
+        }
+
+        private void EvaluateOutcome()
+        {
+            bool playerDead = !Player.IsAlive;
+            bool opponentDead = !Opponent.IsAlive;
+            if (!playerDead && !opponentDead) return;
+
+            // Both dying on the same tick is a Draw, never an arbitrary winner.
+            Outcome = playerDead && opponentDead ? RoundOutcome.Draw
+                    : playerDead ? RoundOutcome.OpponentWin
+                    : RoundOutcome.PlayerWin;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Core\SimWorldMode.cs ====================
+
+namespace LittleDelay.Simulation.Core
+{
+    /// <summary>
+    /// Recording: the rehearsal world both fighters act in live while inputs are
+    /// captured - projectiles fly and bounce but nothing takes damage, nobody can
+    /// die, the arena doesn't shrink, reveal windows are active.
+    /// Battle: a fresh world where both recordings replay - damage, passivity,
+    /// arena shrink and round resolution are live.
+    /// </summary>
+    public enum SimWorldMode
+    {
+        Recording,
+        Battle
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Events\AbilityEvents.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Events
+{
+    public enum AbilityFailureReason
+    {
+        OnCooldown,
+        Invalid
+    }
+
+    public enum ProjectileDespawnReason
+    {
+        HitFighter,
+        HitArenaBounds,
+        Expired
+    }
+
+    /// <summary>Raised the tick an ability successfully fires (cooldown consumed). Ability identity is a string so new abilities never need a new event type.</summary>
+    public readonly struct AbilityUsedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly string AbilityId;
+
+        public AbilityUsedEvent(FighterSlot fighter, string abilityId)
+        {
+            Fighter = fighter;
+            AbilityId = abilityId;
+        }
+    }
+
+    /// <summary>
+    /// Raised when an ability use is rejected (e.g. still on cooldown) so UI/audio can give feedback.
+    /// Only published on the rising edge of the input (the tick a held button starts asking), not on every held tick.
+    /// </summary>
+    public readonly struct AbilityFailedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly string AbilityId;
+        public readonly AbilityFailureReason Reason;
+
+        public AbilityFailedEvent(FighterSlot fighter, string abilityId, AbilityFailureReason reason)
+        {
+            Fighter = fighter;
+            AbilityId = abilityId;
+            Reason = reason;
+        }
+    }
+
+    public readonly struct AbilityCooldownStartedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly string AbilityId;
+        public readonly float Duration;
+
+        public AbilityCooldownStartedEvent(FighterSlot fighter, string abilityId, float duration)
+        {
+            Fighter = fighter;
+            AbilityId = abilityId;
+            Duration = duration;
+        }
+    }
+
+    /// <summary>
+    /// Raised the moment a cooldown becomes ready again. UI does not need this to draw
+    /// the fill (it samples NormalizedRemaining every frame) - it is for one-shot cues.
+    /// </summary>
+    public readonly struct AbilityReadyEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly string AbilityId;
+
+        public AbilityReadyEvent(FighterSlot fighter, string abilityId)
+        {
+            Fighter = fighter;
+            AbilityId = abilityId;
+        }
+    }
+
+    /// <summary>Raised by simulation spawning when a projectile enters the world; ProjectileViewManager pulls a pooled view for it.</summary>
+    public readonly struct ProjectileSpawnedEvent : IGameEvent
+    {
+        public readonly int ProjectileId;
+        public readonly FighterSlot Owner;
+        public readonly Vector3 Position;
+        public readonly Vector3 Velocity;
+
+        public ProjectileSpawnedEvent(int projectileId, FighterSlot owner, Vector3 position, Vector3 velocity)
+        {
+            ProjectileId = projectileId;
+            Owner = owner;
+            Position = position;
+            Velocity = velocity;
+        }
+    }
+
+    /// <summary>Raised on projectile-vs-projectile deflection so presentation can play impact VFX without owning any deflection math.</summary>
+    public readonly struct ProjectileDeflectedEvent : IGameEvent
+    {
+        public readonly int ProjectileId;
+        public readonly Vector3 NewVelocity;
+
+        public ProjectileDeflectedEvent(int projectileId, Vector3 newVelocity)
+        {
+            ProjectileId = projectileId;
+            NewVelocity = newVelocity;
+        }
+    }
+
+    /// <summary>The simulation decides a projectile's life is over; the view releases its pooled instance in response.</summary>
+    public readonly struct ProjectileDespawnedEvent : IGameEvent
+    {
+        public readonly int ProjectileId;
+        public readonly ProjectileDespawnReason Reason;
+
+        public ProjectileDespawnedEvent(int projectileId, ProjectileDespawnReason reason)
+        {
+            ProjectileId = projectileId;
+            Reason = reason;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Events\HealthEvents.cs ====================
+
+using Drewio.UnityToolkit.Core;
+
+namespace LittleDelay.Simulation.Events
+{
+    public enum DamageSource
+    {
+        Projectile,
+        Passivity
+    }
+
+    /// <summary>Snapshot published on every health change, so a health bar wires to one event type.</summary>
+    public readonly struct HealthChangedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly float CurrentHealth;
+        public readonly float MaxHealth;
+
+        public HealthChangedEvent(FighterSlot fighter, float currentHealth, float maxHealth)
+        {
+            Fighter = fighter;
+            CurrentHealth = currentHealth;
+            MaxHealth = maxHealth;
+        }
+    }
+
+    /// <summary>Raised alongside HealthChangedEvent when the change was damage, carrying the source.</summary>
+    public readonly struct FighterDamagedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly float Amount;
+        public readonly DamageSource Source;
+
+        public FighterDamagedEvent(FighterSlot fighter, float amount, DamageSource source)
+        {
+            Fighter = fighter;
+            Amount = amount;
+            Source = source;
+        }
+    }
+
+    /// <summary>Raised when a passivity check fails, distinct from FighterDamagedEvent so UI can show a specific "passive" indicator.</summary>
+    public readonly struct PassivityDetectedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+
+        public PassivityDetectedEvent(FighterSlot fighter)
+        {
+            Fighter = fighter;
+        }
+    }
+
+    public readonly struct FighterDiedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly DamageSource Cause;
+
+        public FighterDiedEvent(FighterSlot fighter, DamageSource cause)
+        {
+            Fighter = fighter;
+            Cause = cause;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Events\MatchFlowEvents.cs ====================
+
+using Drewio.UnityToolkit.Core;
+
+namespace LittleDelay.Simulation.Events
+{
+    /// <summary>Which side of the 1v1 a fighter-scoped event refers to.</summary>
+    public enum FighterSlot
+    {
+        Player = 0,
+        Opponent = 1
+    }
+
+    public enum RoundOutcome
+    {
+        PlayerWin,
+        OpponentWin,
+        Draw,
+        /// <summary>Both recordings ran out and nobody died. Not a result by itself - SimMatch decides whether another round follows.</summary>
+        NoKill
+    }
+
+    /// <summary>Raised once when a new match begins (after the showdown preview).</summary>
+    public readonly struct MatchStartedEvent : IGameEvent
+    {
+        public readonly int MaxRounds;
+        public MatchStartedEvent(int maxRounds) => MaxRounds = maxRounds;
+    }
+
+    public readonly struct ShowdownPreviewStartedEvent : IGameEvent
+    {
+        public readonly float Duration;
+        public ShowdownPreviewStartedEvent(float duration) => Duration = duration;
+    }
+
+    /// <summary>A new round begins (its recording world has just been created).</summary>
+    public readonly struct RoundStartedEvent : IGameEvent
+    {
+        public readonly int RoundNumber;
+        public readonly int MaxRounds;
+
+        public RoundStartedEvent(int roundNumber, int maxRounds)
+        {
+            RoundNumber = roundNumber;
+            MaxRounds = maxRounds;
+        }
+    }
+
+    /// <summary>Pre-recording countdown, during which the enemy's spawn is revealed (and, later, the player's own spawn pulses).</summary>
+    public readonly struct PreRecordingCountdownStartedEvent : IGameEvent
+    {
+        public readonly float Duration;
+        public PreRecordingCountdownStartedEvent(float duration) => Duration = duration;
+    }
+
+    /// <summary>Whole-second tick shared by both countdowns (3, 2, 1). Discrete, so event-driven; continuous timers are pulled instead.</summary>
+    public readonly struct CountdownTickEvent : IGameEvent
+    {
+        public readonly int SecondsRemaining;
+        public CountdownTickEvent(int secondsRemaining) => SecondsRemaining = secondsRemaining;
+    }
+
+    public readonly struct RecordingStartedEvent : IGameEvent
+    {
+        public readonly float Duration;
+        public RecordingStartedEvent(float duration) => Duration = duration;
+    }
+
+    public readonly struct RecordingCompletedEvent : IGameEvent
+    {
+    }
+
+    public enum CameraView
+    {
+        Player,
+        Arena
+    }
+
+    /// <summary>The flow asks for a camera swap; Cinemachine handles the blend, the flow waits for it to finish.</summary>
+    public readonly struct CameraViewRequestedEvent : IGameEvent
+    {
+        public readonly CameraView View;
+        public CameraViewRequestedEvent(CameraView view) => View = view;
+    }
+
+    public readonly struct RoundCountdownStartedEvent : IGameEvent
+    {
+        public readonly int RoundNumber;
+        public readonly float Duration;
+
+        public RoundCountdownStartedEvent(int roundNumber, float duration)
+        {
+            RoundNumber = roundNumber;
+            Duration = duration;
+        }
+    }
+
+    /// <summary>Battle playback (both recordings replaying simultaneously) has started for this round.</summary>
+    public readonly struct BattleStartedEvent : IGameEvent
+    {
+        public readonly int RoundNumber;
+        public BattleStartedEvent(int roundNumber) => RoundNumber = roundNumber;
+    }
+
+    /// <summary>One battle resolved. Simultaneous death on the same tick is a Draw; NoKill means the recordings ran out.</summary>
+    public readonly struct RoundEndedEvent : IGameEvent
+    {
+        public readonly int RoundNumber;
+        public readonly RoundOutcome Outcome;
+
+        public RoundEndedEvent(int roundNumber, RoundOutcome outcome)
+        {
+            RoundNumber = roundNumber;
+            Outcome = outcome;
+        }
+    }
+
+    /// <summary>Whoever kills the opponent in any round wins the match outright; Draw covers simultaneous death and "no kill after the last round".</summary>
+    public readonly struct MatchEndedEvent : IGameEvent
+    {
+        public readonly RoundOutcome Outcome;
+        public readonly int RoundNumber;
+
+        public MatchEndedEvent(RoundOutcome outcome, int roundNumber)
+        {
+            Outcome = outcome;
+            RoundNumber = roundNumber;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Events\RevealEvents.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Events
+{
+    /// <summary>
+    /// A reveal window opened: 3 per recording, starting at recording start and repeating
+    /// every 7s, each lasting 2s (GDD v0.1). RevealIndex is 0-based. One event is published
+    /// per fighter being revealed - the HUD shows the opponent's, the AI is told the player's.
+    /// </summary>
+    public readonly struct RevealWindowStartedEvent : IGameEvent
+    {
+        public readonly FighterSlot RevealedFighter;
+        public readonly int RevealIndex;
+        public readonly float Duration;
+
+        public RevealWindowStartedEvent(FighterSlot revealedFighter, int revealIndex, float duration)
+        {
+            RevealedFighter = revealedFighter;
+            RevealIndex = revealIndex;
+            Duration = duration;
+        }
+    }
+
+    public readonly struct RevealWindowEndedEvent : IGameEvent
+    {
+        public readonly FighterSlot RevealedFighter;
+        public readonly int RevealIndex;
+
+        public RevealWindowEndedEvent(FighterSlot revealedFighter, int revealIndex)
+        {
+            RevealedFighter = revealedFighter;
+            RevealIndex = revealIndex;
+        }
+    }
+
+    /// <summary>
+    /// Published once per tick while a reveal window is active, carrying the revealed
+    /// fighter's real-time position. The view accumulates these into a thick trail.
+    /// </summary>
+    public readonly struct RevealTrailPointEvent : IGameEvent
+    {
+        public readonly FighterSlot RevealedFighter;
+        public readonly int RevealIndex;
+        public readonly Vector3 Position;
+
+        public RevealTrailPointEvent(FighterSlot revealedFighter, int revealIndex, Vector3 position)
+        {
+            RevealedFighter = revealedFighter;
+            RevealIndex = revealIndex;
+            Position = position;
+        }
+    }
+
+    /// <summary>The enemy's spawn point is shown for the duration of the pre-recording countdown.</summary>
+    public readonly struct SpawnRevealedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly Vector3 Position;
+        public readonly float Duration;
+
+        public SpawnRevealedEvent(FighterSlot fighter, Vector3 position, float duration)
+        {
+            Fighter = fighter;
+            Position = position;
+            Duration = duration;
+        }
+    }
+
+    /// <summary>
+    /// Future feature (GDD v0.1: not implemented) - the player's own spawn point pulsates during
+    /// the pre-recording countdown once spawn-point choice on a minimap exists. Only ever for FighterSlot.Player.
+    /// </summary>
+    public readonly struct SpawnPointPulseStartedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+
+        public SpawnPointPulseStartedEvent(FighterSlot fighter)
+        {
+            Fighter = fighter;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Events\WorldEvents.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+
+namespace LittleDelay.Simulation.Events
+{
+    /// <summary>
+    /// A new SimWorld exists (recording or battle). Views subscribe to this to (re)bind to
+    /// the live simulation state. The payload is a read-only handle by convention: views read, never mutate.
+    /// </summary>
+    public readonly struct SimWorldCreatedEvent : IGameEvent
+    {
+        public readonly SimWorld World;
+        public readonly SimWorldMode Mode;
+
+        public SimWorldCreatedEvent(SimWorld world, SimWorldMode mode)
+        {
+            World = world;
+            Mode = mode;
+        }
+    }
+
+    /// <summary>A world is being replaced; views should drop whatever they were showing for it.</summary>
+    public readonly struct SimWorldRetiredEvent : IGameEvent
+    {
+        public readonly SimWorld World;
+
+        public SimWorldRetiredEvent(SimWorld world)
+        {
+            World = world;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Fighters\SimFighter.cs ====================
+
+using System.Collections.Generic;
+using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Fighters
+{
+    /// <summary>
+    /// Engine-agnostic fighter state: position, velocity, aim, health, active push effects and
+    /// owned abilities. SimWorld is the only thing that mutates this class (via the internal
+    /// members), once per tick. Views read it; they never write it.
+    /// </summary>
+    public sealed class SimFighter
+    {
+        // List for deterministic iteration order; the dictionary is only for lookup.
+        private readonly List<SimAbility> _abilityList = new();
+        private readonly Dictionary<string, SimAbility> _abilitiesById = new();
+
+        public FighterSlot Slot { get; }
+        public float MaxHealth { get; }
+
+        public Vector3 Position { get; private set; }
+        public Vector3 Velocity { get; private set; }
+        public Vector3 AimDirection { get; private set; }
+
+        /// <summary>State at the start of the current tick - views lerp PreviousPosition -> Position with SimTickClock.Alpha.</summary>
+        public Vector3 PreviousPosition { get; private set; }
+        public Vector3 PreviousAimDirection { get; private set; }
+
+        /// <summary>This tick's input-driven move direction (clamped to unit length). Dash uses it as its direction.</summary>
+        public Vector3 MoveInput { get; private set; }
+
+        public float CurrentHealth { get; private set; }
+        public bool IsAlive => CurrentHealth > 0f;
+
+        /// <summary>Non-zero only while an external push (projectile knockback) is active; added on top of input-driven velocity, then ends on its own.</summary>
+        public Vector3 DeflectionVelocity { get; private set; }
+        public float DeflectionTimeRemaining { get; private set; }
+
+        /// <summary>Non-zero only while a dash is decaying.</summary>
+        public Vector3 DashVelocity { get; private set; }
+
+        public IReadOnlyList<SimAbility> Abilities => _abilityList;
+
+        internal SimPassivityTracker PassivityTracker { get; } = new();
+
+        // Edge detection so a held button only reports "ability failed" once, not 50 times a second.
+        internal bool FireWasRequested { get; set; }
+        internal bool MobilityWasRequested { get; set; }
+
+        public SimFighter(FighterSlot slot, Vector3 spawnPosition, Vector3 spawnAim, float maxHealth, float startHealth = -1f)
+        {
+            Slot = slot;
+            Position = spawnPosition;
+            PreviousPosition = spawnPosition;
+            MaxHealth = maxHealth;
+            CurrentHealth = startHealth > 0f ? Mathf.Min(startHealth, maxHealth) : maxHealth;
+
+            spawnAim.y = 0f;
+            AimDirection = spawnAim.sqrMagnitude > 0.0001f ? spawnAim.normalized : Vector3.forward;
+            PreviousAimDirection = AimDirection;
+        }
+
+        public void AddAbility(SimAbility ability)
+        {
+            if (_abilitiesById.ContainsKey(ability.AbilityId))
+            {
+                _abilityList.Remove(_abilitiesById[ability.AbilityId]);
+            }
+
+            _abilitiesById[ability.AbilityId] = ability;
+            _abilityList.Add(ability);
+        }
+
+        public bool TryGetAbility(string abilityId, out SimAbility ability) => _abilitiesById.TryGetValue(abilityId, out ability);
+
+        /// <summary>Called first thing each tick so Previous* always holds the last tick's end state.</summary>
+        internal void BeginTick()
+        {
+            PreviousPosition = Position;
+            PreviousAimDirection = AimDirection;
+        }
+
+        /// <summary>This tick's clamped move input and aim. AimDirection only changes when the input supplied one (flattened to XZ).</summary>
+        internal void SetInput(Vector3 moveInput, Vector3 aimDirection)
+        {
+            MoveInput = moveInput;
+
+            aimDirection.y = 0f;
+            if (aimDirection.sqrMagnitude > 0.0001f)
+            {
+                AimDirection = aimDirection.normalized;
+            }
+        }
+
+        /// <summary>Position is already arena-clamped.</summary>
+        internal void SetMotion(Vector3 position, Vector3 velocity)
+        {
+            Position = position;
+            Velocity = velocity;
+        }
+
+        /// <summary>
+        /// Starts (or overrides) an external push. Recorded input keeps playing during it: deflection
+        /// only adds to the velocity input produces, so once it ends the fighter simply carries on from
+        /// wherever the push left it, with no snap-back.
+        /// </summary>
+        internal void ApplyDeflection(Vector3 deflectionVelocity, float durationSeconds)
+        {
+            DeflectionVelocity = deflectionVelocity;
+            DeflectionTimeRemaining = durationSeconds;
+        }
+
+        internal void TickDeflection(float deltaTime)
+        {
+            if (DeflectionTimeRemaining <= 0f)
+            {
+                DeflectionVelocity = Vector3.zero;
+                return;
+            }
+
+            DeflectionTimeRemaining = Mathf.Max(0f, DeflectionTimeRemaining - deltaTime);
+            if (DeflectionTimeRemaining <= 0f)
+            {
+                DeflectionVelocity = Vector3.zero;
+            }
+        }
+
+        internal void ApplyDash(Vector3 dashVelocity)
+        {
+            DashVelocity += dashVelocity;
+        }
+
+        internal void TickDash(float deltaTime, float frictionPerSecond)
+        {
+            DashVelocity = SimMovement.DecayToZero(DashVelocity, frictionPerSecond * deltaTime);
+        }
+
+        /// <summary>Clamped to zero. Use SimCombat.ApplyDamage rather than calling this directly - it also publishes the events.</summary>
+        internal void ReduceHealth(float amount)
+        {
+            CurrentHealth = Mathf.Max(0f, CurrentHealth - amount);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Fighters\SimMovement.cs ====================
+
+using LittleDelay.Simulation.Core;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Fighters
+{
+    /// <summary>
+    /// Pure, stateless kinematic movement math. Deliberately avoids Rigidbody/PhysX (not guaranteed
+    /// reproducible): velocity from input, position += velocity * dt, clamped to the arena radius.
+    /// The old inward-moving wall colliders become a clamp against a radius that is a pure function
+    /// of round number and elapsed battle time.
+    /// </summary>
+    public static class SimMovement
+    {
+        public static Vector3 ClampMoveInput(Vector3 moveDirection)
+        {
+            moveDirection.y = 0f;
+            if (moveDirection.sqrMagnitude > 1f)
+            {
+                moveDirection.Normalize();
+            }
+
+            return moveDirection;
+        }
+
+        public static Vector3 ComputeVelocity(Vector3 clampedMoveDirection, SimMatchConfig config)
+        {
+            return clampedMoveDirection * config.FighterMoveSpeed;
+        }
+
+        public static Vector3 Integrate(Vector3 currentPosition, Vector3 velocity, float deltaTime)
+        {
+            return currentPosition + velocity * deltaTime;
+        }
+
+        /// <summary>Pushes a position back onto the arena boundary along the direction it exceeded it from.</summary>
+        public static Vector3 ClampToArena(Vector3 position, Vector3 arenaCenter, float arenaRadius)
+        {
+            Vector3 offset = position - arenaCenter;
+            offset.y = 0f;
+
+            float distance = offset.magnitude;
+            if (distance <= arenaRadius || distance <= 0.0001f)
+            {
+                return position;
+            }
+
+            Vector3 clamped = arenaCenter + offset.normalized * arenaRadius;
+            clamped.y = position.y;
+            return clamped;
+        }
+
+        /// <summary>Radius at the start of a round: shrinks a fixed amount per round, never below the minimum.</summary>
+        public static float ComputeRoundStartRadius(SimMatchConfig config, int roundNumber)
+        {
+            float radius = config.ArenaInitialRadius - config.ArenaShrinkPerRound * Mathf.Max(0, roundNumber - 1);
+            return Mathf.Max(config.ArenaMinRadius, radius);
+        }
+
+        /// <summary>Radius during a battle: round-start radius minus continuous shrink over elapsed battle time.</summary>
+        public static float ComputeBattleRadius(SimMatchConfig config, int roundNumber, float battleElapsedSeconds)
+        {
+            float radius = ComputeRoundStartRadius(config, roundNumber) - config.ArenaShrinkRatePerSecond * battleElapsedSeconds;
+            return Mathf.Max(config.ArenaMinRadius, radius);
+        }
+
+        /// <summary>Reduces a vector's length by amount (never past zero) without changing its direction.</summary>
+        public static Vector3 DecayToZero(Vector3 velocity, float amount)
+        {
+            float magnitude = velocity.magnitude;
+            if (magnitude <= amount || magnitude <= 0.0001f)
+            {
+                return Vector3.zero;
+            }
+
+            return velocity * ((magnitude - amount) / magnitude);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Fighters\SimPassivityTracker.cs ====================
+
+using LittleDelay.Simulation.Core;
+
+namespace LittleDelay.Simulation.Fighters
+{
+    /// <summary>
+    /// Two independent checks, evaluated together every PassivityCheckIntervalSeconds: distance the
+    /// fighter chose to travel since the last check, and whether any ability was successfully used
+    /// since the last check. Failing either marks the fighter passive for that interval - moving
+    /// without acting is passive, acting without moving is passive.
+    /// </summary>
+    public sealed class SimPassivityTracker
+    {
+        private float _distanceSinceCheck;
+        private bool _actionTakenSinceCheck;
+        private float _timeSinceCheck;
+
+        /// <summary>
+        /// Accumulates this tick and evaluates once the interval has elapsed. Returns true only on the
+        /// tick a check completes; callers act on isPassive only when this returns true.
+        /// </summary>
+        public bool Update(float distanceThisTick, bool actionTakenThisTick, float deltaTime, SimMatchConfig config, out bool isPassive)
+        {
+            _distanceSinceCheck += distanceThisTick;
+            _actionTakenSinceCheck |= actionTakenThisTick;
+            _timeSinceCheck += deltaTime;
+
+            isPassive = false;
+            if (_timeSinceCheck < config.PassivityCheckIntervalSeconds)
+            {
+                return false;
+            }
+
+            isPassive = _distanceSinceCheck < config.PassivityMinTravelDistance || !_actionTakenSinceCheck;
+
+            _distanceSinceCheck = 0f;
+            _actionTakenSinceCheck = false;
+            _timeSinceCheck = 0f;
+            return true;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\CameraTransitionStates.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    /// <summary>Blend to the player's camera at the start of a round, then the pre-recording countdown.</summary>
+    public sealed class PlayerCameraTransitionState : CameraTransitionStateBase
+    {
+        public PlayerCameraTransitionState(MatchFlow flow) : base(flow) { }
+
+        protected override CameraView View => CameraView.Player;
+
+        protected override void OnTransitionFinished() => Flow.Machine.ChangeState(Flow.Countdown);
+    }
+
+    /// <summary>
+    /// Blend out to the arena camera. The battle world is created on entry so the fighters are already
+    /// standing at their spawns when the camera arrives.
+    /// </summary>
+    public sealed class ArenaCameraTransitionState : CameraTransitionStateBase
+    {
+        public ArenaCameraTransitionState(MatchFlow flow) : base(flow) { }
+
+        protected override CameraView View => CameraView.Arena;
+
+        public override void Enter()
+        {
+            Flow.Match.BeginBattle();
+            base.Enter();
+        }
+
+        protected override void OnTransitionFinished() => Flow.Machine.ChangeState(Flow.PreBattleCountdown);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\CountdownStates.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    /// <summary>Pre-recording countdown. The opponent's spawn point is revealed for its duration.</summary>
+    public sealed class CountdownState : TimedCountdownStateBase
+    {
+        public CountdownState(MatchFlow flow) : base(flow) { }
+
+        protected override float DurationSeconds => Flow.Config.PreRecordingCountdownSeconds;
+
+        public override void Enter()
+        {
+            float duration = DurationSeconds;
+            Flow.EventBus.Publish(new PreRecordingCountdownStartedEvent(duration));
+            Flow.EventBus.Publish(new SpawnRevealedEvent(FighterSlot.Opponent, Flow.Match.CurrentWorld.Opponent.Position, duration));
+            base.Enter();
+        }
+
+        protected override void OnCountdownFinished() => Flow.Machine.ChangeState(Flow.Recording);
+    }
+
+    public sealed class PreBattleCountdownState : TimedCountdownStateBase
+    {
+        public PreBattleCountdownState(MatchFlow flow) : base(flow) { }
+
+        protected override float DurationSeconds => Flow.Config.PreBattleCountdownSeconds;
+
+        public override void Enter()
+        {
+            Flow.EventBus.Publish(new RoundCountdownStartedEvent(Flow.Match.RoundNumber, DurationSeconds));
+            base.Enter();
+        }
+
+        protected override void OnCountdownFinished() => Flow.Machine.ChangeState(Flow.BattlePhase);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\MatchStateBase.cs ====================
+
+using Drewio.UnityToolkit.Core;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    public abstract class MatchStateBase : IState
+    {
+        protected readonly MatchFlow Flow;
+
+        protected MatchStateBase(MatchFlow flow) => Flow = flow;
+
+        public virtual void Enter() { }
+        public virtual void Tick(float deltaTime) { }
+        public virtual void Exit() { }
+    }
+
+    /// <summary>Counts real (frame) time down and publishes CountdownTickEvent whenever the displayed whole second changes.</summary>
+    public abstract class TimedCountdownStateBase : MatchStateBase
+    {
+        private float _remaining;
+        private int _lastShownSecond;
+
+        protected TimedCountdownStateBase(MatchFlow flow) : base(flow) { }
+
+        protected abstract float DurationSeconds { get; }
+        protected abstract void OnCountdownFinished();
+
+        public override void Enter()
+        {
+            _remaining = DurationSeconds;
+            _lastShownSecond = int.MaxValue;
+            PublishSecondIfChanged();
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            _remaining -= deltaTime;
+            if (_remaining <= 0f)
+            {
+                OnCountdownFinished();
+                return;
+            }
+
+            PublishSecondIfChanged();
+        }
+
+        private void PublishSecondIfChanged()
+        {
+            int second = (int)System.Math.Ceiling(_remaining);
+            if (second == _lastShownSecond) return;
+
+            _lastShownSecond = second;
+            Flow.EventBus.Publish(new Events.CountdownTickEvent(second));
+        }
+    }
+
+    /// <summary>Asks the camera for a view, gives Cinemachine one frame to start the blend, then waits for it to end.</summary>
+    public abstract class CameraTransitionStateBase : MatchStateBase
+    {
+        private bool _blendHadAFrameToStart;
+
+        protected CameraTransitionStateBase(MatchFlow flow) : base(flow) { }
+
+        protected abstract Events.CameraView View { get; }
+        protected abstract void OnTransitionFinished();
+
+        public override void Enter()
+        {
+            _blendHadAFrameToStart = false;
+            Flow.Camera.ShowView(View);
+            Flow.EventBus.Publish(new Events.CameraViewRequestedEvent(View));
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            if (!_blendHadAFrameToStart)
+            {
+                _blendHadAFrameToStart = true;
+                return;
+            }
+
+            if (!Flow.Camera.IsBlending)
+            {
+                OnTransitionFinished();
+            }
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\ResultStates.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    /// <summary>Applies the battle result (RoundEndedEvent), holds a beat so the last hit reads, then either rolls into the next round or ends the match.</summary>
+    public sealed class RoundResolveState : MatchStateBase
+    {
+        private float _remaining;
+
+        public RoundResolveState(MatchFlow flow) : base(flow) { }
+
+        public override void Enter()
+        {
+            _remaining = Flow.Config.RoundResolveSeconds;
+            Flow.Match.CompleteBattle();
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            _remaining -= deltaTime;
+            if (_remaining > 0f) return;
+
+            if (Flow.Match.IsOver)
+            {
+                Flow.Machine.ChangeState(Flow.MatchOver);
+                return;
+            }
+
+            Flow.Match.BeginRound();
+            Flow.Machine.ChangeState(Flow.PlayerCameraTransition);
+        }
+    }
+
+    public sealed class MatchOverState : MatchStateBase
+    {
+        public MatchOverState(MatchFlow flow) : base(flow) { }
+
+        public override void Enter()
+        {
+            Flow.EventBus.Publish(new MatchEndedEvent(Flow.Match.MatchOutcome.Value, Flow.Match.RoundNumber));
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\ShowdownPreviewState.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    public sealed class ShowdownPreviewState : MatchStateBase
+    {
+        private float _remaining;
+
+        public ShowdownPreviewState(MatchFlow flow) : base(flow) { }
+
+        public override void Enter()
+        {
+            _remaining = Flow.Config.ShowdownPreviewSeconds;
+            Flow.EventBus.Publish(new ShowdownPreviewStartedEvent(_remaining));
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            _remaining -= deltaTime;
+            if (_remaining > 0f) return;
+
+            Flow.Match.StartMatch();
+            Flow.Match.BeginRound();
+            Flow.Machine.ChangeState(Flow.PlayerCameraTransition);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\States\SimulationPhaseStates.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow.States
+{
+    /// <summary>Both fighters act live in the rehearsal world while their inputs are captured, one fixed tick at a time.</summary>
+    public sealed class RecordingState : MatchStateBase
+    {
+        private SimRoundRunner _runner;
+
+        public RecordingState(MatchFlow flow) : base(flow) { }
+
+        public override void Enter()
+        {
+            _runner = Flow.Match.CurrentRunner;
+            Flow.Clock.Freeze();
+            Flow.EventBus.Publish(new RecordingStartedEvent(Flow.Config.RecordingDurationSeconds));
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            Flow.Clock.Advance(deltaTime, _runner.Step);
+            if (!_runner.IsFinished) return;
+
+            Flow.Match.CompleteRecording();
+            Flow.Machine.ChangeState(Flow.ArenaCameraTransition);
+        }
+
+        public override void Exit() => Flow.Clock.Freeze();
+    }
+
+    /// <summary>Both recordings replay simultaneously in a fresh battle world until someone dies or they run out.</summary>
+    public sealed class BattlePhaseState : MatchStateBase
+    {
+        private SimRoundRunner _runner;
+
+        public BattlePhaseState(MatchFlow flow) : base(flow) { }
+
+        public override void Enter()
+        {
+            _runner = Flow.Match.CurrentRunner;
+            Flow.Clock.Freeze();
+            Flow.EventBus.Publish(new BattleStartedEvent(Flow.Match.RoundNumber));
+        }
+
+        public override void Tick(float deltaTime)
+        {
+            Flow.Clock.Advance(deltaTime, _runner.Step);
+            if (_runner.IsFinished)
+            {
+                Flow.Machine.ChangeState(Flow.RoundResolve);
+            }
+        }
+
+        public override void Exit() => Flow.Clock.Freeze();
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\ICameraDirector.cs ====================
+
+using LittleDelay.Simulation.Events;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>The one thing the match flow needs from the camera rig: switch view, and know when the blend is over.</summary>
+    public interface ICameraDirector
+    {
+        bool IsBlending { get; }
+        void ShowView(CameraView view);
+    }
+
+    /// <summary>No-op director for tests and for scenes without a camera rig.</summary>
+    public sealed class NullCameraDirector : ICameraDirector
+    {
+        public bool IsBlending => false;
+        public void ShowView(CameraView view) { }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\ISimRecordingInputProvider.cs ====================
+
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Reveal;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>
+    /// Supplies the live input source for each fighter during a Recording phase. The composition root decides
+    /// who is who: the player slot gets the device-backed source, the opponent slot gets the AI bot today and
+    /// a second human or a network source later - SimMatch never changes.
+    /// </summary>
+    public interface ISimRecordingInputProvider
+    {
+        ISimInputSource CreateSource(FighterSlot slot, SimWorld world, ISimIntelSource intel);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\MatchCommands.cs ====================
+
+using Drewio.UnityToolkit.Core;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>Published by the result screen. UI never references the match flow; the composition root listens.</summary>
+    public readonly struct RematchRequestedEvent : IGameEvent
+    {
+    }
+
+    public readonly struct QuitToMenuRequestedEvent : IGameEvent
+    {
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\MatchFlow.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using Drewio.UnityToolkit.StateMachines;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Flow.States;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>
+    /// Owns the toolkit StateMachine and the eight match states. The transition table is the single place
+    /// that says which phase may follow which - an illegal jump throws instead of silently corrupting the match.
+    /// The states are plain C# (no MonoBehaviour); a MonoBehaviour only calls Tick(Time.deltaTime).
+    /// </summary>
+    public sealed class MatchFlow
+    {
+        public SimMatch Match { get; }
+        public SimMatchConfig Config { get; }
+        public IEventBus EventBus { get; }
+        public ICameraDirector Camera { get; }
+        public SimTickClock Clock { get; }
+        public StateMachine Machine { get; }
+
+        public ShowdownPreviewState ShowdownPreview { get; }
+        public PlayerCameraTransitionState PlayerCameraTransition { get; }
+        public CountdownState Countdown { get; }
+        public RecordingState Recording { get; }
+        public ArenaCameraTransitionState ArenaCameraTransition { get; }
+        public PreBattleCountdownState PreBattleCountdown { get; }
+        public BattlePhaseState BattlePhase { get; }
+        public RoundResolveState RoundResolve { get; }
+        public MatchOverState MatchOver { get; }
+
+        public MatchFlow(SimMatch match, SimMatchConfig config, IEventBus eventBus, ICameraDirector camera, SimTickClock clock)
+        {
+            Match = match ?? throw new ArgumentNullException(nameof(match));
+            Config = config ?? throw new ArgumentNullException(nameof(config));
+            EventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            Camera = camera ?? new NullCameraDirector();
+            Clock = clock ?? throw new ArgumentNullException(nameof(clock));
+
+            ShowdownPreview = new ShowdownPreviewState(this);
+            PlayerCameraTransition = new PlayerCameraTransitionState(this);
+            Countdown = new CountdownState(this);
+            Recording = new RecordingState(this);
+            ArenaCameraTransition = new ArenaCameraTransitionState(this);
+            PreBattleCountdown = new PreBattleCountdownState(this);
+            BattlePhase = new BattlePhaseState(this);
+            RoundResolve = new RoundResolveState(this);
+            MatchOver = new MatchOverState(this);
+
+            Machine = new StateMachine(new TransitionTableBuilder()
+                .Allow<ShowdownPreviewState, PlayerCameraTransitionState>()
+                .Allow<PlayerCameraTransitionState, CountdownState>()
+                .Allow<CountdownState, RecordingState>()
+                .Allow<RecordingState, ArenaCameraTransitionState>()
+                .Allow<ArenaCameraTransitionState, PreBattleCountdownState>()
+                .Allow<PreBattleCountdownState, BattlePhaseState>()
+                .Allow<BattlePhaseState, RoundResolveState>()
+                .Allow<RoundResolveState, PlayerCameraTransitionState>() // no kill: next round
+                .Allow<RoundResolveState, MatchOverState>()
+                .Allow<MatchOverState, ShowdownPreviewState>()           // rematch
+                .Build());
+        }
+
+        public void Start() => Machine.ChangeState(ShowdownPreview);
+
+        public void Tick(float deltaTime) => Machine.Tick(deltaTime);
+
+        /// <summary>Only meaningful on the result screen; ignored in any other state.</summary>
+        public void RequestRematch()
+        {
+            if (Machine.CurrentState == MatchOver)
+            {
+                Machine.ChangeState(ShowdownPreview);
+            }
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\SimMatch.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using LittleDelay.Simulation.Recording;
+using LittleDelay.Simulation.Reveal;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>
+    /// Pure match model: round counter, the recordings captured this round, the spawn/health carried between
+    /// rounds, and the win rule. It owns no timers and no Unity objects; MatchFlow's states decide WHEN each
+    /// step happens, SimMatch decides WHAT it does. Rule (from the old RoundManager): a kill wins the match
+    /// outright, simultaneous death is a Draw, and a round that ends with nobody dead rolls into the next one
+    /// (from where the fighters ended up, with the health they had) until MaxRounds, then the match is a Draw.
+    /// </summary>
+    public sealed class SimMatch
+    {
+        private readonly SimMatchConfig _config;
+        private readonly IEventBus _eventBus;
+        private readonly ISimRecordingInputProvider _inputProvider;
+        private readonly Vector3 _arenaCenter;
+        private readonly SimSpawn _initialPlayerSpawn;
+        private readonly SimSpawn _initialOpponentSpawn;
+        private readonly SimInputRecorder _playerRecorder = new();
+        private readonly SimInputRecorder _opponentRecorder = new();
+
+        private SimSpawn _playerSpawn;
+        private SimSpawn _opponentSpawn;
+        private float _playerHealth = -1f;
+        private float _opponentHealth = -1f;
+        private SimInputRecording _playerRecording = SimInputRecording.Empty;
+        private SimInputRecording _opponentRecording = SimInputRecording.Empty;
+
+        public int RoundNumber { get; private set; }
+        public bool IsOver { get; private set; }
+        public RoundOutcome? MatchOutcome { get; private set; }
+
+        /// <summary>The runner for the phase in progress (recording or battle). Stays set after a phase finishes so views can show its final state.</summary>
+        public SimRoundRunner CurrentRunner { get; private set; }
+        public SimWorld CurrentWorld => CurrentRunner?.World;
+
+        public SimMatch(
+            SimMatchConfig config, IEventBus eventBus, ISimRecordingInputProvider inputProvider,
+            Vector3 arenaCenter, SimSpawn playerSpawn, SimSpawn opponentSpawn)
+        {
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _inputProvider = inputProvider ?? throw new ArgumentNullException(nameof(inputProvider));
+            _arenaCenter = arenaCenter;
+            _initialPlayerSpawn = playerSpawn;
+            _initialOpponentSpawn = opponentSpawn;
+        }
+
+        /// <summary>Resets everything for a fresh match (also used for rematches) and publishes MatchStartedEvent.</summary>
+        public void StartMatch()
+        {
+            RetireCurrentWorld();
+            CurrentRunner = null;
+            RoundNumber = 0;
+            IsOver = false;
+            MatchOutcome = null;
+            _playerSpawn = _initialPlayerSpawn;
+            _opponentSpawn = _initialOpponentSpawn;
+            _playerHealth = -1f;
+            _opponentHealth = -1f;
+            _playerRecording = SimInputRecording.Empty;
+            _opponentRecording = SimInputRecording.Empty;
+
+            _eventBus.Publish(new MatchStartedEvent(_config.MaxRounds));
+        }
+
+        /// <summary>Creates the next round's recording world (idle until its runner is stepped) and publishes it to the views.</summary>
+        public SimRoundRunner BeginRound()
+        {
+            if (IsOver) throw new InvalidOperationException("The match is over; call StartMatch() first.");
+
+            RetireCurrentWorld();
+            RoundNumber++;
+
+            var world = new SimWorld(_config, _eventBus, SimWorldMode.Recording, RoundNumber, _arenaCenter,
+                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth);
+
+            var reveal = new SimRevealSystem(_config, _eventBus, world.Player, world.Opponent);
+
+            CurrentRunner = SimRoundRunner.ForRecording(
+                world, _config,
+                _inputProvider.CreateSource(FighterSlot.Player, world, reveal),
+                _inputProvider.CreateSource(FighterSlot.Opponent, world, reveal),
+                _playerRecorder, _opponentRecorder, reveal);
+
+            _eventBus.Publish(new SimWorldCreatedEvent(world, SimWorldMode.Recording));
+            _eventBus.Publish(new RoundStartedEvent(RoundNumber, _config.MaxRounds));
+            return CurrentRunner;
+        }
+
+        public void CompleteRecording()
+        {
+            if (CurrentRunner == null || CurrentRunner.Mode != SimWorldMode.Recording || !CurrentRunner.IsFinished)
+            {
+                throw new InvalidOperationException("The recording phase has not finished.");
+            }
+
+            _playerRecording = _playerRecorder.ToRecording();
+            _opponentRecording = _opponentRecorder.ToRecording();
+            _eventBus.Publish(new RecordingCompletedEvent());
+        }
+
+        /// <summary>Replaces the rehearsal world with a fresh battle world from the same spawns and health, ready to replay both recordings.</summary>
+        public SimRoundRunner BeginBattle()
+        {
+            RetireCurrentWorld();
+
+            var world = new SimWorld(_config, _eventBus, SimWorldMode.Battle, RoundNumber, _arenaCenter,
+                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth);
+
+            CurrentRunner = SimRoundRunner.ForBattle(world, _config, _playerRecording, _opponentRecording);
+            _eventBus.Publish(new SimWorldCreatedEvent(world, SimWorldMode.Battle));
+            return CurrentRunner;
+        }
+
+        /// <summary>Resolves the finished battle: publishes RoundEndedEvent, decides whether the match is over, and carries state into the next round.</summary>
+        public RoundOutcome CompleteBattle()
+        {
+            if (CurrentRunner == null || CurrentRunner.Mode != SimWorldMode.Battle || !CurrentRunner.IsFinished)
+            {
+                throw new InvalidOperationException("The battle has not finished.");
+            }
+
+            RoundOutcome outcome = CurrentRunner.Outcome;
+            SimWorld world = CurrentRunner.World;
+
+            _eventBus.Publish(new RoundEndedEvent(RoundNumber, outcome));
+
+            if (outcome != RoundOutcome.NoKill)
+            {
+                EndMatch(outcome);
+            }
+            else if (RoundNumber >= _config.MaxRounds)
+            {
+                EndMatch(RoundOutcome.Draw);
+            }
+            else
+            {
+                CarryIntoNextRound(world);
+            }
+
+            return outcome;
+        }
+
+        private void EndMatch(RoundOutcome outcome)
+        {
+            // MatchEndedEvent is published by MatchOverState so the result screen waits out the round-resolve pause.
+            IsOver = true;
+            MatchOutcome = outcome;
+        }
+
+        private void CarryIntoNextRound(SimWorld finished)
+        {
+            float nextRadius = SimMovement.ComputeRoundStartRadius(_config, RoundNumber + 1);
+
+            _playerSpawn = NextSpawn(finished.Player, nextRadius);
+            _opponentSpawn = NextSpawn(finished.Opponent, nextRadius);
+
+            if (_config.CarryHealthBetweenRounds)
+            {
+                _playerHealth = finished.Player.CurrentHealth;
+                _opponentHealth = finished.Opponent.CurrentHealth;
+            }
+            else
+            {
+                _playerHealth = -1f;
+                _opponentHealth = -1f;
+            }
+        }
+
+        private SimSpawn NextSpawn(SimFighter fighter, float nextRadius)
+        {
+            Vector3 position = SimMovement.ClampToArena(fighter.Position, _arenaCenter, nextRadius);
+            return new SimSpawn(position, fighter.AimDirection);
+        }
+
+        private void RetireCurrentWorld()
+        {
+            if (CurrentRunner == null) return;
+            _eventBus.Publish(new SimWorldRetiredEvent(CurrentRunner.World));
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Flow\SimRoundRunner.cs ====================
+
+using System;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Recording;
+using LittleDelay.Simulation.Reveal;
+
+namespace LittleDelay.Simulation.Flow
+{
+    /// <summary>
+    /// Drives exactly one SimWorld one tick at a time: asks each fighter's input source for this tick's frame,
+    /// (when recording) captures it, ticks the world, then decides whether the phase is over. Recording and
+    /// playback go through the same loop, which is what keeps recorded frame N aligned with playback tick N.
+    /// </summary>
+    public sealed class SimRoundRunner
+    {
+        private readonly ISimInputSource _player;
+        private readonly ISimInputSource _opponent;
+        private readonly SimInputRecorder _playerRecorder;
+        private readonly SimInputRecorder _opponentRecorder;
+        private readonly SimRevealSystem _reveal;
+        private readonly int _phaseTicks;
+        private readonly int _settleTicks;
+        private int _settleStartTick = -1;
+
+        public SimWorld World { get; }
+        public SimWorldMode Mode => World.Mode;
+        public bool IsFinished { get; private set; }
+
+        /// <summary>Battle only. NoKill when the recordings (and the projectiles still in flight) ran out with both fighters alive.</summary>
+        public RoundOutcome Outcome { get; private set; } = RoundOutcome.NoKill;
+
+        public float SecondsRemaining => Math.Max(0, _phaseTicks - World.TickCount) * _secondsPerTick;
+        public float Progress01 => _phaseTicks <= 0 ? 1f : Math.Min(1f, (float)World.TickCount / _phaseTicks);
+
+        private readonly float _secondsPerTick;
+
+        private SimRoundRunner(
+            SimWorld world, float secondsPerTick, ISimInputSource player, ISimInputSource opponent,
+            SimInputRecorder playerRecorder, SimInputRecorder opponentRecorder, SimRevealSystem reveal,
+            int phaseTicks, int settleTicks)
+        {
+            World = world;
+            _secondsPerTick = secondsPerTick;
+            _player = player;
+            _opponent = opponent;
+            _playerRecorder = playerRecorder;
+            _opponentRecorder = opponentRecorder;
+            _reveal = reveal;
+            _phaseTicks = phaseTicks;
+            _settleTicks = settleTicks;
+        }
+
+        public static SimRoundRunner ForRecording(
+            SimWorld world, SimMatchConfig config, ISimInputSource player, ISimInputSource opponent,
+            SimInputRecorder playerRecorder, SimInputRecorder opponentRecorder, SimRevealSystem reveal)
+        {
+            playerRecorder.Clear();
+            opponentRecorder.Clear();
+            return new SimRoundRunner(world, config.FixedDeltaTime, player, opponent, playerRecorder, opponentRecorder, reveal, config.RecordingTicks, 0);
+        }
+
+        public static SimRoundRunner ForBattle(
+            SimWorld world, SimMatchConfig config, SimInputRecording player, SimInputRecording opponent)
+        {
+            int phaseTicks = Math.Max(player.FrameCount, opponent.FrameCount);
+            int settleTicks = (int)Math.Ceiling(config.ProjectileLifeTimeSeconds / config.FixedDeltaTime);
+            return new SimRoundRunner(
+                world, config.FixedDeltaTime,
+                new SimRecordedInputSource(player), new SimRecordedInputSource(opponent),
+                null, null, null, phaseTicks, settleTicks);
+        }
+
+        /// <summary>Runs one tick. Returns true while there is more to run, false once finished (the shape SimTickClock.Advance wants).</summary>
+        public bool Step()
+        {
+            if (IsFinished) return false;
+
+            int tick = World.TickCount;
+
+            // Once the recordings are spent, only let leftover projectiles resolve; nobody gets punished for standing still.
+            if (Mode == SimWorldMode.Battle && tick >= _phaseTicks)
+            {
+                World.PassivityEnabled = false;
+            }
+
+            SimInputFrame playerFrame = _player.GetInput(tick);
+            SimInputFrame opponentFrame = _opponent.GetInput(tick);
+
+            if (_playerRecorder != null)
+            {
+                _playerRecorder.RecordFrame(playerFrame);
+                _opponentRecorder.RecordFrame(opponentFrame);
+            }
+
+            World.Tick(playerFrame, opponentFrame);
+            _reveal?.Tick(World.TickCount);
+
+            if (Mode == SimWorldMode.Recording)
+            {
+                IsFinished = World.TickCount >= _phaseTicks;
+            }
+            else if (World.IsEnded)
+            {
+                Outcome = World.Outcome.Value;
+                IsFinished = true;
+            }
+            else if (World.TickCount >= _phaseTicks)
+            {
+                if (_settleStartTick < 0) _settleStartTick = World.TickCount;
+
+                if (World.Projectiles.Count == 0 || World.TickCount - _settleStartTick >= _settleTicks)
+                {
+                    Outcome = RoundOutcome.NoKill;
+                    IsFinished = true;
+                }
+            }
+
+            return !IsFinished;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Recording\SimInputRecorder.cs ====================
+
+using System;
+using System.Collections.Generic;
+using LittleDelay.Simulation.Core;
+
+namespace LittleDelay.Simulation.Recording
+{
+    /// <summary>Captures one SimInputFrame per world tick - purely a list, nothing to drift.</summary>
+    public sealed class SimInputRecorder
+    {
+        private readonly List<SimInputFrame> _frames = new();
+
+        public int FrameCount => _frames.Count;
+
+        public void Clear() => _frames.Clear();
+
+        public void RecordFrame(SimInputFrame frame) => _frames.Add(frame);
+
+        public SimInputRecording ToRecording() => new SimInputRecording(_frames.ToArray());
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Recording\SimInputRecording.cs ====================
+
+using System;
+using System.Collections.Generic;
+using LittleDelay.Simulation.Core;
+
+namespace LittleDelay.Simulation.Recording
+{
+    /// <summary>
+    /// An immutable, tick-indexed input stream: frame N is what the fighter did on world tick N.
+    /// Because it holds no positions, replaying it through a SimWorld started from the same spawn
+    /// reproduces the recorded run exactly.
+    /// </summary>
+    public sealed class SimInputRecording
+    {
+        private readonly SimInputFrame[] _frames;
+
+        public int FrameCount => _frames.Length;
+
+        internal SimInputRecording(SimInputFrame[] frames)
+        {
+            _frames = frames;
+        }
+
+        public static SimInputRecording Empty { get; } = new SimInputRecording(Array.Empty<SimInputFrame>());
+
+        /// <summary>Past the end of the stream the fighter does nothing.</summary>
+        public SimInputFrame GetFrame(int tickIndex)
+        {
+            return tickIndex >= 0 && tickIndex < _frames.Length ? _frames[tickIndex] : SimInputFrame.None;
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Recording\SimRecordedInputSource.cs ====================
+
+using System;
+using System.Collections.Generic;
+using LittleDelay.Simulation.Core;
+
+namespace LittleDelay.Simulation.Recording
+{
+    /// <summary>Plays a recording back as an ISimInputSource; past the end the fighter does nothing.</summary>
+    public sealed class SimRecordedInputSource : ISimInputSource
+    {
+        private readonly SimInputRecording _recording;
+
+        public SimRecordedInputSource(SimInputRecording recording)
+        {
+            _recording = recording ?? throw new ArgumentNullException(nameof(recording));
+        }
+
+        public bool IsExhausted(int tickIndex) => tickIndex >= _recording.FrameCount;
+
+        public SimInputFrame GetInput(int tickIndex) => _recording.GetFrame(tickIndex);
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\Simulation\Reveal\SimRevealSystem.cs ====================
+
+using System;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Fighters;
+using UnityEngine;
+
+namespace LittleDelay.Simulation.Reveal
+{
+    /// <summary>What one fighter last learned about the other through a reveal window.</summary>
+    public readonly struct SimIntel
+    {
+        public readonly bool IsKnown;
+        public readonly Vector3 Position;
+        public readonly Vector3 Velocity;
+        /// <summary>World ticks completed when this was observed.</summary>
+        public readonly int ObservedTick;
+
+        public SimIntel(Vector3 position, Vector3 velocity, int observedTick)
+        {
+            IsKnown = true;
+            Position = position;
+            Velocity = velocity;
+            ObservedTick = observedTick;
+        }
+    }
+
+    /// <summary>Everything a fighter is allowed to know about its opponent while recording blind.</summary>
+    public interface ISimIntelSource
+    {
+        SimIntel GetIntelAbout(FighterSlot subject);
+    }
+
+    /// <summary>
+    /// Runs the reveal schedule (GDD v0.1: 3 windows per recording, one every 7s starting at tick 0, each 2s).
+    /// While a window is open each fighter is "seen": trail-point events drive the HUD and the same observation
+    /// is stored as intel for the AI - so the bot learns exactly what a human would see, and outside a window
+    /// only has stale intel to extrapolate from. Recording-mode only.
+    /// </summary>
+    public sealed class SimRevealSystem : ISimIntelSource
+    {
+        private readonly IEventBus _eventBus;
+        private readonly SimFighter _player;
+        private readonly SimFighter _opponent;
+        private readonly int[] _windowStartTicks;
+        private readonly int _windowDurationTicks;
+        private readonly float _windowDurationSeconds;
+        private readonly SimIntel[] _intel = new SimIntel[2];
+
+        public SimRevealSystem(SimMatchConfig config, IEventBus eventBus, SimFighter player, SimFighter opponent)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+            _player = player ?? throw new ArgumentNullException(nameof(player));
+            _opponent = opponent ?? throw new ArgumentNullException(nameof(opponent));
+
+            float dt = config.FixedDeltaTime;
+            _windowDurationSeconds = config.RevealDurationSeconds;
+            _windowDurationTicks = Mathf.Max(1, Mathf.RoundToInt(config.RevealDurationSeconds / dt));
+            _windowStartTicks = new int[Mathf.Max(0, config.RevealsPerRecording)];
+            for (int i = 0; i < _windowStartTicks.Length; i++)
+            {
+                _windowStartTicks[i] = Mathf.RoundToInt(i * config.RevealIntervalSeconds / dt);
+            }
+        }
+
+        public SimIntel GetIntelAbout(FighterSlot subject) => _intel[(int)subject];
+
+        /// <summary>Called once at the end of every Recording-mode tick, with the number of ticks completed so far.</summary>
+        public void Tick(int completedTicks)
+        {
+            int tickJustRun = completedTicks - 1;
+
+            for (int i = 0; i < _windowStartTicks.Length; i++)
+            {
+                int start = _windowStartTicks[i];
+                if (tickJustRun < start || tickJustRun >= start + _windowDurationTicks) continue;
+
+                if (tickJustRun == start)
+                {
+                    _eventBus.Publish(new RevealWindowStartedEvent(FighterSlot.Player, i, _windowDurationSeconds));
+                    _eventBus.Publish(new RevealWindowStartedEvent(FighterSlot.Opponent, i, _windowDurationSeconds));
+                }
+
+                Observe(_player, i, completedTicks);
+                Observe(_opponent, i, completedTicks);
+
+                if (tickJustRun == start + _windowDurationTicks - 1)
+                {
+                    _eventBus.Publish(new RevealWindowEndedEvent(FighterSlot.Player, i));
+                    _eventBus.Publish(new RevealWindowEndedEvent(FighterSlot.Opponent, i));
+                }
+
+                return; // windows never overlap (interval > duration)
+            }
+        }
+
+        private void Observe(SimFighter fighter, int revealIndex, int completedTicks)
+        {
+            _intel[(int)fighter.Slot] = new SimIntel(fighter.Position, fighter.Velocity, completedTicks);
+            _eventBus.Publish(new RevealTrailPointEvent(fighter.Slot, revealIndex, fighter.Position));
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\BattleManagerUI.cs ====================
+
+using System;
+using System.Collections.Generic;
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Flow;
+using TMPro;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Match HUD: countdown numbers, the recording timer, round pips and centre-screen announcements.
+    /// Everything discrete arrives as an event; the one continuous value (recording time left) is pulled from the
+    /// active SimRoundRunner each frame, so there is no per-tick "timer tick" event spam.
+    /// Same class/file name as before so existing scene references survive; the old per-event UnityEvent
+    /// wiring to BattleManager is gone.
+    /// </summary>
+    public class BattleUIManager : MonoBehaviour
+    {
+        [Header("UI Elements")]
+        [SerializeField] private GameObject _roundsCountPanel;
+        [SerializeField] private GameObject _roundUIPrefab;
+        [SerializeField] private TextMeshProUGUI _countdownDisplay;
+        [SerializeField] private TextMeshProUGUI _announcementDisplay;
+
+        [Tooltip("Used for the active recording timer.")]
+        [SerializeField] private TextMeshProUGUI _timerDisplay;
+
+        [SerializeField] private float _announcementSeconds = 1.5f;
+
+        private SimMatch _match;
+        private bool _showRecordingTimer;
+        private float _clearAnnouncementAt = -1f;
+        private bool _resultShown;
+        private readonly List<IDisposable> _subs = new();
+
+        public void Initialize(IEventBus bus, SimMatch match)
+        {
+            _match = match;
+
+            _subs.Add(bus.Subscribe<MatchStartedEvent>(_ => { ClearRounds(); _resultShown = false; ClearCenter(); }));
+            _subs.Add(bus.Subscribe<RoundStartedEvent>(OnRoundStarted));
+            _subs.Add(bus.Subscribe<CountdownTickEvent>(e => ShowCountdown(e.SecondsRemaining)));
+            _subs.Add(bus.Subscribe<RecordingStartedEvent>(_ => { ClearCenter(); _showRecordingTimer = true; }));
+            _subs.Add(bus.Subscribe<RecordingCompletedEvent>(_ => { _showRecordingTimer = false; _timerDisplay.text = ""; Announce("RECORDING SAVED!", true); }));
+            _subs.Add(bus.Subscribe<BattleStartedEvent>(_ => Announce("FIGHT!", true)));
+            _subs.Add(bus.Subscribe<RoundEndedEvent>(e => { if (e.Outcome != RoundOutcome.NoKill) ShowResult(e.Outcome); }));
+            _subs.Add(bus.Subscribe<MatchEndedEvent>(e => ShowResult(e.Outcome)));
+
+            ClearCenter();
+            ClearRounds();
+            _timerDisplay.text = "";
+        }
+
+        private void OnDestroy()
+        {
+            foreach (IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+        }
+
+        private void Update()
+        {
+            if (_showRecordingTimer && _match?.CurrentRunner != null)
+            {
+                _timerDisplay.text = $"{_match.CurrentRunner.SecondsRemaining:F2}s";
+            }
+
+            if (_clearAnnouncementAt > 0f && Time.unscaledTime >= _clearAnnouncementAt)
+            {
+                _clearAnnouncementAt = -1f;
+                ClearCenter();
+            }
+        }
+
+        private void OnRoundStarted(RoundStartedEvent e)
+        {
+            Instantiate(_roundUIPrefab, _roundsCountPanel.transform);
+            if (e.RoundNumber > 1) Announce($"ROUND {e.RoundNumber}", true);
+        }
+
+        private void ShowCountdown(int seconds)
+        {
+            _announcementDisplay.gameObject.SetActive(false);
+            _countdownDisplay.gameObject.SetActive(true);
+            _countdownDisplay.text = seconds.ToString();
+            _timerDisplay.text = "";
+        }
+
+        private void ShowResult(RoundOutcome outcome)
+        {
+            if (_resultShown) return;
+            _resultShown = true;
+
+            string text = outcome switch
+            {
+                RoundOutcome.PlayerWin => "FIGHTER 1 WINS!",
+                RoundOutcome.OpponentWin => "FIGHTER 2 WINS!",
+                _ => "DRAW!"
+            };
+
+            Announce(text, false);
+        }
+
+        private void Announce(string text, bool autoClear)
+        {
+            _countdownDisplay.gameObject.SetActive(false);
+            _announcementDisplay.gameObject.SetActive(true);
+            _announcementDisplay.text = text;
+            _clearAnnouncementAt = autoClear ? Time.unscaledTime + _announcementSeconds : -1f;
+        }
+
+        private void ClearCenter()
+        {
+            _countdownDisplay.text = "";
+            _countdownDisplay.gameObject.SetActive(false);
+            _announcementDisplay.gameObject.SetActive(false);
+        }
+
+        private void ClearRounds()
+        {
+            foreach (Transform child in _roundsCountPanel.transform) Destroy(child.gameObject);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\CameraTargetController.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Core;
+using LittleDelay.Simulation.Events;
+using UnityEngine;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Mouse/stick look for the third-person camera target. Pure presentation: it accumulates yaw/pitch from
+    /// GameInput and exposes Yaw so PlayerSimInputSource can turn it into the fighter's aim direction.
+    /// At the start of every recording the yaw snaps to the fighter's spawn facing so the camera starts looking
+    /// where the fighter looks.
+    /// </summary>
+    public sealed class CameraTargetController : MonoBehaviour
+    {
+        [Header("Look Settings")]
+        [SerializeField] private float lookSensitivity = 0.5f;
+        [SerializeField] private float topClamp = -70f;
+        [SerializeField] private float bottomClamp = 70f;
+
+        private float pitch; // Up/Down (X axis)
+        private float yaw;   // Left/Right (Y axis)
+        private System.IDisposable _worldSub;
+
+        public float Yaw => yaw;
+
+        public void Initialize(IEventBus eventBus)
+        {
+            _worldSub = eventBus.Subscribe<SimWorldCreatedEvent>(e =>
+            {
+                if (e.Mode != SimWorldMode.Recording) return;
+
+                Vector3 aim = e.World.Player.AimDirection;
+                SetRotation(new Vector3(pitch, Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg, 0f));
+            });
+        }
+
+        private void OnDestroy() => _worldSub?.Dispose();
+
+        public void SetRotation(Vector3 angles)
+        {
+            yaw = angles.y;
+            pitch = angles.x;
+
+            transform.rotation = Quaternion.Euler(angles);
+        }
+
+        public Vector3 GetCurrentRotation()
+        {
+            return new Vector3(pitch, yaw, 0f);
+        }
+
+        private void Update()
+        {
+            if (GameInput.Instance == null) return;
+
+            Vector2 lookInput = GameInput.Instance.GetLookVector();
+
+            yaw += lookInput.x * lookSensitivity;
+            pitch -= lookInput.y * lookSensitivity;
+            pitch = Mathf.Clamp(pitch, topClamp, bottomClamp);
+
+            transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
+        }
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\CursorManager.cs ====================
+
+using UnityEngine;
+
+public class CursorManager : MonoBehaviour
+{
+    private void Start()
+    {
+        LockCursor();
+    }
+
+    public void LockCursor()
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+
+        Cursor.visible = false;
+    }
+
+    public void UnlockCursor()
+    {
+        Cursor.lockState = CursorLockMode.None;
+
+        Cursor.visible = true;
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\GameInput.cs ====================
+
+using System;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class GameInput : MonoBehaviour
+{
+    public static GameInput Instance { get; private set; }
+
+    private const string PLAYER_PREFS_BINDINGS = "InputBindings";
+
+    private InputSystem_Actions inputActions;
+
+    public event Action OnPauseAction;
+    public event Action OnBindingRebinding;
+    public event Action OnJumpAction;
+    public event Action OnRecordAction;
+    public event Action OnRecordStopAction;
+    public event Action OnPlaybackStopAction;
+    public event Action OnPlaybackPauseAction;
+    public event Action OnRoundStartAction;
+    public event Action OnNextAbilityAction;
+    public event Action OnUseAbilityAction;
+    public event Action OnFireAction;
+
+    public enum Binding
+    {
+        MoveUp,
+        MoveDown,
+        MoveLeft,
+        MoveRight,
+        Jump,
+        Pause,
+        GamepadPause
+    }
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+
+        inputActions = new InputSystem_Actions();
+
+        if (PlayerPrefs.HasKey(PLAYER_PREFS_BINDINGS))
+            inputActions.LoadBindingOverridesFromJson(PlayerPrefs.GetString(PLAYER_PREFS_BINDINGS));
+
+        inputActions.Player.Enable();
+
+        inputActions.Player.Jump.performed += OnJump_performed;
+        inputActions.Player.RecordStart.performed += OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed += OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed += OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed += OnPlaybackPause_performed;
+        inputActions.Player.StartRound.performed += OnStartRound_performed;
+        inputActions.Player.NextAbility.performed += OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed += OnUseAbility_performed;
+        inputActions.Player.Fire.performed += OnFire_performed;
+    }
+
+    private void OnJump_performed(InputAction.CallbackContext ctx) => OnJumpAction?.Invoke();
+    private void OnRecordStart_performed(InputAction.CallbackContext ctx) => OnRecordAction?.Invoke();
+    private void OnRecordStop_performed(InputAction.CallbackContext ctx) => OnRecordStopAction?.Invoke();
+    private void OnPlaybackStop_performed(InputAction.CallbackContext ctx) => OnPlaybackStopAction?.Invoke();
+    private void OnPlaybackPause_performed(InputAction.CallbackContext ctx) => OnPlaybackPauseAction?.Invoke();
+    private void OnStartRound_performed(InputAction.CallbackContext ctx) => OnRoundStartAction?.Invoke();
+    private void OnNextAbility_performed(InputAction.CallbackContext ctx) => OnNextAbilityAction?.Invoke();
+    private void OnUseAbility_performed(InputAction.CallbackContext ctx) => OnUseAbilityAction?.Invoke();
+    private void OnFire_performed(InputAction.CallbackContext ctx) => OnFireAction?.Invoke();
+
+    public Vector2 GetMovementVectorNormalized()
+    {
+        return inputActions.Player.Move.ReadValue<Vector2>().normalized;
+    }
+
+    public Vector2 GetLookVector()
+    {
+        return inputActions.Player.Look.ReadValue<Vector2>();
+    }
+
+    /// <summary>True while the fire button is held. PlayerSimInputSource uses this so holding fire keeps shooting at the ability's cooldown rate.</summary>
+    public bool IsFireHeld()
+    {
+        return inputActions.Player.Fire.IsPressed();
+    }
+
+    private void OnDestroy()
+    {
+        if (inputActions == null) return;
+
+        inputActions.Player.Jump.performed -= OnJump_performed;
+        inputActions.Player.RecordStart.performed -= OnRecordStart_performed;
+        inputActions.Player.RecordFinish.performed -= OnRecordStop_performed;
+        inputActions.Player.PlaybackStop.performed -= OnPlaybackStop_performed;
+        inputActions.Player.PlaybackPause.performed -= OnPlaybackPause_performed;
+        inputActions.Player.StartRound.performed -= OnStartRound_performed;
+        inputActions.Player.NextAbility.performed -= OnNextAbility_performed;
+        inputActions.Player.UseAbility.performed -= OnUseAbility_performed;
+        inputActions.Player.Fire.performed -= OnFire_performed; 
+        inputActions.Player.Disable();
+        inputActions.Dispose();
+
+        OnPauseAction = null;
+        OnBindingRebinding = null;
+        OnJumpAction = null;
+        OnRecordAction = null;
+        OnRecordStopAction = null;
+        OnPlaybackStopAction = null;
+        OnPlaybackPauseAction = null;
+        OnRoundStartAction = null;
+        OnNextAbilityAction = null;
+        OnUseAbilityAction = null;
+        OnFireAction = null;
+    }
+
+    public string GetBindingText(Binding binding)
+    {
+        return binding switch
+        {
+            Binding.MoveUp => inputActions.Player.Move.bindings[1].ToDisplayString(),
+            Binding.MoveDown => inputActions.Player.Move.bindings[3].ToDisplayString(),
+            Binding.MoveLeft => inputActions.Player.Move.bindings[5].ToDisplayString(),
+            Binding.MoveRight => inputActions.Player.Move.bindings[7].ToDisplayString(),
+            Binding.Jump => inputActions.Player.Jump.bindings[0].ToDisplayString(),
+            _ => string.Empty
+        };
+    }
+
+    public void RebindBinding(Binding binding, Action onComplete = null)
+    {
+        inputActions.Player.Disable();
+
+        InputActionRebindingExtensions.RebindingOperation rebindOp = binding switch
+        {
+            Binding.MoveUp => inputActions.Player.Move.PerformInteractiveRebinding(1),
+            Binding.MoveDown => inputActions.Player.Move.PerformInteractiveRebinding(3),
+            Binding.MoveLeft => inputActions.Player.Move.PerformInteractiveRebinding(5),
+            Binding.MoveRight => inputActions.Player.Move.PerformInteractiveRebinding(7),
+            Binding.Jump => inputActions.Player.Jump.PerformInteractiveRebinding(0),
+            _ => null
+        };
+
+        rebindOp?
+            .OnComplete(callback =>
+            {
+                inputActions.Player.Enable();
+                onComplete?.Invoke();
+                callback.Dispose();
+                PlayerPrefs.SetString(PLAYER_PREFS_BINDINGS, inputActions.SaveBindingOverridesAsJson());
+                PlayerPrefs.Save();
+                OnBindingRebinding?.Invoke();
+            })
+            .OnCancel(callback =>
+            {
+                inputActions.Player.Enable();
+                callback.Dispose();
+            })
+            .Start();
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\GameOverScreenUI.cs ====================
+
+using Drewio.UnityToolkit.Core;
+using LittleDelay.Simulation.Events;
+using LittleDelay.Simulation.Flow;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace LittleDelay.Presentation
+{
+    /// <summary>
+    /// Result screen. Shows on MatchEndedEvent and publishes commands (rematch / quit) instead of calling the
+    /// match flow or a scene loader directly - the composition root owns what those commands do.
+    /// Public Quit() is kept so an inspector-wired Button.onClick still works; Rematch() is new.
+    /// </summary>
+    public class GameOverScreenUI : MonoBehaviour
+    {
+        [SerializeField] private GameObject _gameOverScreen;
+        [SerializeField] private TMPro.TextMeshProUGUI _winnerText;
+        [Tooltip("Optional. If set, the cursor is released while the screen is up and re-locked afterwards.")]
+        [SerializeField] private CursorManager _cursorManager;
+        [Tooltip("Optional. Hooked up automatically; leave empty if you wire Button.onClick in the inspector.")]
+        [SerializeField] private Button _rematchButton;
+        [SerializeField] private Button _quitButton;
+
+        private IEventBus _bus;
+        private readonly System.Collections.Generic.List<System.IDisposable> _subs = new();
+
+        public void Initialize(IEventBus bus)
+        {
+            _bus = bus;
+            _subs.Add(bus.Subscribe<MatchEndedEvent>(e => ShowGameOverScreen(e.Outcome)));
+            _subs.Add(bus.Subscribe<ShowdownPreviewStartedEvent>(_ => HideGameOverScreen()));
+
+            if (_rematchButton != null) _rematchButton.onClick.AddListener(Rematch);
+            if (_quitButton != null) _quitButton.onClick.AddListener(Quit);
+
+            HideGameOverScreen();
+        }
+
+        private void OnDestroy()
+        {
+            foreach (System.IDisposable sub in _subs) sub.Dispose();
+            _subs.Clear();
+            if (_rematchButton != null) _rematchButton.onClick.RemoveListener(Rematch);
+            if (_quitButton != null) _quitButton.onClick.RemoveListener(Quit);
+        }
+
+        public void HideGameOverScreen()
+        {
+            _gameOverScreen.SetActive(false);
+            if (_cursorManager != null) _cursorManager.LockCursor();
+        }
+
+        public void ShowGameOverScreen(RoundOutcome outcome)
+        {
+            if (_winnerText != null)
+            {
+                _winnerText.text = outcome switch
+                {
+                    RoundOutcome.PlayerWin => "FIGHTER 1 WINS!",
+                    RoundOutcome.OpponentWin => "FIGHTER 2 WINS!",
+                    _ => "DRAW!"
+                };
+            }
+
+            _gameOverScreen.SetActive(true);
+            if (_cursorManager != null) _cursorManager.UnlockCursor();
+        }
+
+        public void Rematch() => _bus?.Publish(new RematchRequestedEvent());
+
+        public void Quit() => _bus?.Publish(new QuitToMenuRequestedEvent());
+    }
+}
+
+==================== F:\Unity projects\Little Delay\Little Delay\Assets\Scripts\MainMenuUI.cs ====================
+
+using Drewio.UnityToolkit.Scenes;
+using LittleDelay.Composition;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace LittleDelay.Presentation
+{
+    public class MainMenuUI : MonoBehaviour
+    {
+        [SerializeField] private Button _startButton;
+        [SerializeField] private Button _quitButton;
+        [SerializeField] private string _arenaSceneName = "SampleScene";
+
+        private SceneLoadingService _sceneLoading;
+
+        private void Awake()
+        {
+            // Leaf UI with no composition root of its own: resolve the one service it needs, once.
+            _sceneLoading = GameCompositionRoot.Instance.Services.Resolve<SceneLoadingService>();
+
+            _startButton.onClick.AddListener(OnStartButtonClicked);
+            _quitButton.onClick.AddListener(OnQuitButtonClicked);
+        }
+
+        private void OnStartButtonClicked() => _sceneLoading.LoadScene(_arenaSceneName);
+
+        private void OnQuitButtonClicked() => Application.Quit();
+    }
+}

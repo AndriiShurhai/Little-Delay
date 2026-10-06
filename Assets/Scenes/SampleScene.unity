@@ -256,52 +256,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 41916397}
   m_CullTransparentMesh: 1
---- !u!1 &61151838
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 61151840}
-  - component: {fileID: 61151839}
-  m_Layer: 0
-  m_Name: InputRecorder
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &61151839
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 61151838}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3fe0294c0fc17b34db51739c36724235, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InputRecorder
-  _passivityThreshold: 3
-  _maxIdlePercentage: 0.6
---- !u!4 &61151840
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 61151838}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -19.9, y: 0.67708, z: 3.4703}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 454825232}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &141639115
 GameObject:
   m_ObjectHideFlags: 0
@@ -781,7 +735,7 @@ Camera:
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 1527
+    m_Bits: 4294967295
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -801,7 +755,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.000000004567526, y: -0.7071068, z: -0.0000000045675264, w: 0.7071067}
+  m_LocalRotation: {x: 0, y: -0.7071068, z: 0, w: 0.7071067}
   m_LocalPosition: {x: 11.360001, y: 3.293, z: -10.119999}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1296,8 +1250,6 @@ Transform:
   - {fileID: 548111614}
   - {fileID: 1210341166}
   - {fileID: 1267014226}
-  - {fileID: 719820674}
-  - {fileID: 61151840}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &468877542
@@ -1421,7 +1373,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 475777771}
-  - component: {fileID: 475777770}
   m_Layer: 0
   m_Name: ___DEBUG_MANANGER____
   m_TagString: Untagged
@@ -1429,18 +1380,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &475777770
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 475777769}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ec57b4db51c56804e99c87e9093aa039, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ReplayVisualizer
 --- !u!4 &475777771
 Transform:
   m_ObjectHideFlags: 0
@@ -1606,6 +1545,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 9
       objectReference: {fileID: 0}
+    - target: {fileID: 4922859079678765934, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+      propertyPath: _slot
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6685058777432189011, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
       propertyPath: m_Layer
       value: 9
@@ -1634,78 +1577,29 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 9
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8635352737009114581, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
     m_RemovedGameObjects:
     - {fileID: 8768635149433999138, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 548111604}
-    - targetCorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 548111603}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
---- !u!114 &548111599 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 8273379291693062885, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
-  m_PrefabInstance: {fileID: 548111598}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 548111602}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5b990c1ef4265fb42b6673eb452040e2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerController
---- !u!1 &548111602 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 3681035340044026995, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
-  m_PrefabInstance: {fileID: 548111598}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &548111603
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 548111602}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3fe0294c0fc17b34db51739c36724235, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::InputRecorder
-  _passivityThreshold: 3
-  _maxIdlePercentage: 0.6
---- !u!114 &548111604
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 548111602}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 366bf9070a366af45a5bd22d4e57cce9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::AIInputSource
-  _engageRange: 12
-  _preferredRange: 6
-  _tooCloseRange: 1.5
-  _maxFireRange: 14
-  _fireInterval: 0.6
-  _fireJitter: 0.15
-  _strafeSwitchInterval: 1.2
-  _strafeSwitchJitter: 0.5
-  _dashDecisionInterval: 1.5
-  _dashDecisionJitter: 0.5
-  _predictionHorizon: 1.5
-  _turnSpeed: 360
-  _randomJumpChancePerSecond: 0.15
 --- !u!4 &548111614 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
   m_PrefabInstance: {fileID: 548111598}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &548111625 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4922859079678765934, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+  m_PrefabInstance: {fileID: 548111598}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbd74f39fd093b74e90cbbb5b6d506ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.FighterView
 --- !u!1 &652297863
 GameObject:
   m_ObjectHideFlags: 0
@@ -1874,7 +1768,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 454825232}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &719820672
+--- !u!1 &788675124
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1882,90 +1776,46 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 719820674}
-  - component: {fileID: 719820673}
+  - component: {fileID: 788675125}
+  - component: {fileID: 788675126}
   m_Layer: 0
-  m_Name: PlayerInputSource
+  m_Name: ProjectileViewManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &719820673
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 719820672}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3a62e8a08bbc285469a52b91eb33339b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerInputSource
-  _cameraTarget: {fileID: 1517512996}
---- !u!4 &719820674
+--- !u!4 &788675125
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 719820672}
+  m_GameObject: {fileID: 788675124}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -19.9, y: 0.67708, z: 3.4703}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 454825232}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &756957145
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 756957147}
-  - component: {fileID: 756957146}
-  m_Layer: 0
-  m_Name: RecordingManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &756957146
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 756957145}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7d958f330501faa4caa47d6f4149a2df, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RecordingManager
-  _inputPlayback: {fileID: 0}
-  _playerInputSource: {fileID: 719820673}
-  _inputRecorder: {fileID: 61151839}
---- !u!4 &756957147
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 756957145}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -795.68805, y: -991.32294, z: 3.4703}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1807999398}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &788675126
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 788675124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36c37193a433f1c46867bd1c47403cf7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.ProjectileViewManager
+  _prefab: {fileID: 5461304777900167631, guid: 160029f46c9aa544cbd91ed89d4c0902, type: 3}
+  _poolRoot: {fileID: 788675125}
+  _prewarmCount: 16
+  _heightOffset: 1
 --- !u!1 &799402786
 GameObject:
   m_ObjectHideFlags: 0
@@ -2304,6 +2154,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 920373841}
+  - component: {fileID: 920373842}
   m_Layer: 0
   m_Name: Arena
   m_TagString: Untagged
@@ -2329,6 +2180,21 @@ Transform:
   - {fileID: 1160858430}
   m_Father: {fileID: 454825232}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &920373842
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 920373840}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1926a0715173c92498a979386c25a9c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.ArenaView
+  _boundary: {fileID: 1964826267}
+  _baseDiameter: 1
+  _catchUpSpeed: 1
 --- !u!1 &952533224
 GameObject:
   m_ObjectHideFlags: 0
@@ -3263,6 +3129,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameOverScreenUI
   _gameOverScreen: {fileID: 1173694836}
   _winnerText: {fileID: 0}
+  _cursorManager: {fileID: 1531353460}
+  _rematchButton: {fileID: 2115335601}
+  _quitButton: {fileID: 262493227}
 --- !u!1 &1210341165
 GameObject:
   m_ObjectHideFlags: 0
@@ -3538,8 +3407,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3f4d99b6ec905cb42852b9bd8b21f822, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RevealVisualizer
-  _revealSystem: {fileID: 1623769631}
-  _revealDuration: 2
   _fadeDuration: 2
   _lineColor: {r: 0, g: 0.8, b: 1, a: 1}
   _lineWidth: 2
@@ -3567,6 +3434,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1270235331}
+  - component: {fileID: 1270235332}
   m_Layer: 0
   m_Name: Camera
   m_TagString: Untagged
@@ -3591,6 +3459,21 @@ Transform:
   - {fileID: 1476861559}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1270235332
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1270235330}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ebe5acd6afce15641885430e7656c705, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.CameraDirector
+  _arenaCamera: {fileID: 1476861557}
+  _playerCamera: {fileID: 1879819366}
+  _cinemachineBrain: {fileID: 330585548}
 --- !u!1 &1281185661
 GameObject:
   m_ObjectHideFlags: 0
@@ -3862,6 +3745,7 @@ MonoBehaviour:
   _countdownDisplay: {fileID: 1305467063}
   _announcementDisplay: {fileID: 1532141580}
   _timerDisplay: {fileID: 2120740349}
+  _announcementSeconds: 1.5
 --- !u!1 &1438381503
 GameObject:
   m_ObjectHideFlags: 0
@@ -4012,11 +3896,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1270235331}
   m_LocalEulerAnglesHint: {x: 53.5, y: 179.484, z: 0}
---- !u!4 &1517512996 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8521751017053342841, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+--- !u!114 &1517512997 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 4012571768932975381, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
   m_PrefabInstance: {fileID: 456418019379659623}
   m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a0afdd2d671e649a021b84596be476, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CameraTargetController
 --- !u!1 &1531353459
 GameObject:
   m_ObjectHideFlags: 0
@@ -4289,58 +4179,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b5f4ac142e8093348ad0bccd0df8ac5c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AbilitySlotUI
-  _abilityManager: {fileID: 456418019379659633}
   _slot: 0
   _icon: {fileID: 1537704786}
   _cooldownOverlay: {fileID: 1069486168}
   _keybindText: {fileID: 652297865}
---- !u!1 &1623769630
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1623769632}
-  - component: {fileID: 1623769631}
-  m_Layer: 0
-  m_Name: RevealSystem
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1623769631
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1623769630}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ee5eb5d1383479d4c89af9797e723292, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RevealSystem
-  _revealInterval: 7
-  _revealVisualizer: {fileID: 1267014225}
-  _spawnIndicator: {fileID: 1172633760}
---- !u!4 &1623769632
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1623769630}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -775.788, y: -992, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1807999398}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  _iconSprite: {fileID: 0}
+  _keybindLabel: 
 --- !u!1 &1629880478
 GameObject:
   m_ObjectHideFlags: 0
@@ -4350,12 +4194,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1629880480}
-  - component: {fileID: 1629880484}
-  - component: {fileID: 1629880483}
-  - component: {fileID: 1629880482}
   - component: {fileID: 1629880481}
   m_Layer: 0
-  m_Name: BattleManager
+  m_Name: MatchCompositionRoot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4385,148 +4226,100 @@ MonoBehaviour:
   m_GameObject: {fileID: 1629880478}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 284bfa1be7040844f9d73839c30dc4de, type: 3}
+  m_Script: {fileID: 11500000, guid: 585a2b6a28e77f843bb8781b233f781c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ArenaController
-  _wallsTransforms:
-  - {fileID: 1081014413}
-  - {fileID: 264844012}
-  - {fileID: 1059258013}
-  - {fileID: 1210738525}
-  _inwardMoveDistance: 2
-  _inwardMoveDuration: 2
---- !u!114 &1629880482
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1629880478}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a375ca7a54ac174eb6c30fd01695670, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RoundManager
---- !u!114 &1629880483
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1629880478}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 11d33a482f7f2a84fba897963fb98a89, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FighterSpawner
-  _ghostPrefab: {fileID: 1712242727714722855, guid: 2be0f390c623fe740b645f15551463b9, type: 3}
---- !u!114 &1629880484
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1629880478}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f09a4cb2ea8923b48b59e72cf3a8d890, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BattleManager
-  _liveController: {fileID: 456418019379659628}
-  _playerRecorder: {fileID: 61151839}
-  _botController: {fileID: 548111599}
-  _botInputSource: {fileID: 548111604}
-  _botRecorder: {fileID: 548111603}
-  _revealSystem: {fileID: 1623769631}
-  _fighterSpawner: {fileID: 1629880483}
-  _roundManager: {fileID: 1629880482}
-  _arenaController: {fileID: 1629880481}
-  _spawnPoint: {fileID: 1802372371}
-  _spawnPointSecond: {fileID: 658141162}
-  _arenaCamera: {fileID: 1476861557}
-  _playerCamera: {fileID: 1879819366}
-  _cinemachineBrain: {fileID: 330585548}
-  _passivityDamagePerTick: 15
-  _passivityDamageTicks: 3
-  OnShowdownPreviewStarted:
-    m_PersistentCalls:
-      m_Calls: []
-  OnCountdownTick:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRecordingTick:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRecordingFinished:
-    m_PersistentCalls:
-      m_Calls: []
-  OnBattlePhaseStarted:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRoundContinues:
-    m_PersistentCalls:
-      m_Calls: []
-  OnFighterWon:
-    m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 1173694840}
-        m_TargetAssemblyTypeName: GameOverScreenUI, Assembly-CSharp
-        m_MethodName: ShowGameOverScreen
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-      - m_Target: {fileID: 1531353460}
-        m_TargetAssemblyTypeName: CursorManager, Assembly-CSharp
-        m_MethodName: UnlockCursor
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-  OnMatchDraw:
-    m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 1173694840}
-        m_TargetAssemblyTypeName: GameOverScreenUI, Assembly-CSharp
-        m_MethodName: ShowGameOverScreen
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-      - m_Target: {fileID: 1531353460}
-        m_TargetAssemblyTypeName: CursorManager, Assembly-CSharp
-        m_MethodName: UnlockCursor
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
-  OnRoundStarts:
-    m_PersistentCalls:
-      m_Calls: []
-  OnRecordingStarts:
-    m_PersistentCalls:
-      m_Calls: []
-  _isPassivityPunishmentOn: 1
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Composition.MatchCompositionRoot
+  _matchConfig:
+    TicksPerSecond: 50
+    MaxRounds: 3
+    RecordingDurationSeconds: 20
+    CarryHealthBetweenRounds: 1
+    ShowdownPreviewSeconds: 3
+    PreRecordingCountdownSeconds: 3
+    PreBattleCountdownSeconds: 3
+    RoundResolveSeconds: 1.5
+    MaxHealth: 100
+    FighterMoveSpeed: 6
+    FighterHurtboxRadius: 0.5
+    BlastAbilityCooldownSeconds: 0.5
+    ProjectileSpeed: 20
+    ProjectileRadius: 0.15
+    ProjectileDamage: 8
+    ProjectileLifeTimeSeconds: 3
+    ProjectileSpawnOffset: 0.6
+    ProjectileArenaExitMargin: 2
+    DashCooldownSeconds: 2
+    DashSpeed: 18
+    DashFrictionPerSecond: 60
+    ArenaInitialRadius: 15
+    ArenaMinRadius: 4
+    ArenaShrinkPerRound: 2
+    ArenaShrinkRatePerSecond: 0.15
+    DeflectionKnockbackSpeed: 3
+    DeflectionDurationSeconds: 0.35
+    PassivityCheckIntervalSeconds: 4
+    PassivityMinTravelDistance: 1.5
+    PassivityDamage: 5
+    RevealsPerRecording: 3
+    RevealIntervalSeconds: 7
+    RevealDurationSeconds: 2
+  _aiConfig:
+    EngageDistance: 9
+    RetreatDistance: 4
+    FireRange: 14
+    FireConeDegrees: 12
+    StrafeSwitchSeconds: 1.2
+    StrafeStrength: 0.8
+    PredictionHorizonSeconds: 1.5
+    DashIntervalSeconds: 3
+  _arenaCenter: {fileID: 920373841}
+  _playerSpawn: {fileID: 456418019379659624}
+  _opponentSpawn: {fileID: 548111614}
+  _playerInput: {fileID: 456418019379659642}
+  _cameraTarget: {fileID: 1517512997}
+  _cameraDirector: {fileID: 1270235332}
+  _playerView: {fileID: 456418019379659643}
+  _opponentView: {fileID: 548111625}
+  _projectileViews: {fileID: 788675126}
+  _arenaView: {fileID: 920373842}
+  _revealVisualizer: {fileID: 1267014225}
+  _spawnIndicator: {fileID: 1172633760}
+  _battleHud: {fileID: 1350596265}
+  _gameOverScreen: {fileID: 1173694840}
+  _healthBars:
+  - {fileID: 1890931767}
+  - {fileID: 889463941}
+  _abilitySlots:
+  - {fileID: 1537704788}
+  _audioCues:
+    BlastFired:
+      names: []
+    DashUsed:
+      names: []
+    AbilityOnCooldown:
+      names: []
+    ProjectileDeflected:
+      names: []
+    FighterHit:
+      names: []
+    PassivityWarning:
+      names: []
+    FighterDied:
+      names: []
+    CountdownTick:
+      names: []
+    RecordingStarted:
+      names: []
+    RecordingSaved:
+      names: []
+    BattleStarted:
+      names: []
+    MatchWon:
+      names: []
+    MatchDrawn:
+      names: []
+    MatchMusic: 
+  _mainMenuSceneName: MainMenu
 --- !u!1 &1657803843
 GameObject:
   m_ObjectHideFlags: 0
@@ -4928,11 +4721,10 @@ Transform:
   m_Children:
   - {fileID: 475777771}
   - {fileID: 1629880480}
-  - {fileID: 756957147}
-  - {fileID: 1623769632}
   - {fileID: 1531353461}
   - {fileID: 1704597872}
   - {fileID: 1172633759}
+  - {fileID: 788675125}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1879819366 stripped
@@ -10607,7 +10399,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1629880484}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: BattleManager, Assembly-CSharp
         m_MethodName: ContinueAfterMatchOver
         m_Mode: 1
@@ -11006,28 +10798,28 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2497812259750756685, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
   m_PrefabInstance: {fileID: 456418019379659623}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &456418019379659628 stripped
+--- !u!114 &456418019379659642 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 8273379291693062885, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 8635352737009114581, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
   m_PrefabInstance: {fileID: 456418019379659623}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5b990c1ef4265fb42b6673eb452040e2, type: 3}
+  m_Script: {fileID: 11500000, guid: b268672834cd3f7438fb920fed122d13, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerController
---- !u!114 &456418019379659633 stripped
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.PlayerSimInputSource
+--- !u!114 &456418019379659643 stripped
 MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5927020847114095410, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
+  m_CorrespondingSourceObject: {fileID: 4922859079678765934, guid: 09f5401582579064d8f75d8a48a03b7f, type: 3}
   m_PrefabInstance: {fileID: 456418019379659623}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5388cd83ee8ccf5409c6c5dbac3162bd, type: 3}
+  m_Script: {fileID: 11500000, guid: bbd74f39fd093b74e90cbbb5b6d506ce, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::AbilityManager
+  m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.FighterView
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

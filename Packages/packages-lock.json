@@ -1,5 +1,12 @@
 {
   "dependencies": {
+    "com.drewio.core": {
+      "version": "https://github.com/AndriiShurhai/UnityToolkit.git#v1.1.1",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "b96b12ca9792e37e8d3d968f4720f54c050db518"
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.9",
       "depth": 0,
