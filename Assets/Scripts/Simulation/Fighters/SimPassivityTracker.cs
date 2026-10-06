@@ -1,16 +1,12 @@
-﻿using LittleDelay.Simulation.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using LittleDelay.Simulation.Core;
 
 namespace LittleDelay.Simulation.Fighters
 {
     /// <summary>
-    /// Two independent checks, evaluated together every PassivityCheckIntervalSeconds;
-    /// total distance traveled since the last check, and whether any action
-    /// (firing) was taken since the last check. Failing either marks the fighter
-    /// passive for that interval - moving without firing is passive, firing
-    /// without moving is passive. 
+    /// Two independent checks, evaluated together every PassivityCheckIntervalSeconds: distance the
+    /// fighter chose to travel since the last check, and whether any ability was successfully used
+    /// since the last check. Failing either marks the fighter passive for that interval - moving
+    /// without acting is passive, acting without moving is passive.
     /// </summary>
     public sealed class SimPassivityTracker
     {
@@ -19,10 +15,8 @@ namespace LittleDelay.Simulation.Fighters
         private float _timeSinceCheck;
 
         /// <summary>
-        /// Accumulates this tick's movement/action, and evaluates passivity once
-        /// the check interval has elapsed. Returns true only on the tick a check
-        /// actually completes - callers should only act on <paramref name="isPassive"/>
-        /// when this returns true.
+        /// Accumulates this tick and evaluates once the interval has elapsed. Returns true only on the
+        /// tick a check completes; callers act on isPassive only when this returns true.
         /// </summary>
         public bool Update(float distanceThisTick, bool actionTakenThisTick, float deltaTime, SimMatchConfig config, out bool isPassive)
         {

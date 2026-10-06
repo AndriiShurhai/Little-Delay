@@ -1,7 +1,4 @@
-﻿using Drewio.UnityToolkit.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using Drewio.UnityToolkit.Core;
 
 namespace LittleDelay.Simulation.Events
 {
@@ -11,11 +8,7 @@ namespace LittleDelay.Simulation.Events
         Passivity
     }
 
-    ///<summary>
-    /// Pull-friendly snapshot published on every health change, so
-    /// BattleUIManager's health bar wires to one event type instead of
-    /// separately handling damage/heal/passivity-tick cases itself.
-    ///</summary>
+    /// <summary>Snapshot published on every health change, so a health bar wires to one event type.</summary>
     public readonly struct HealthChangedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
@@ -30,7 +23,7 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    ///<summary>Raised alongside HealthChangedEvent specifically when the change was damage, carrying the source - lets a hit-VFX listener distinguish "hot shot" from "passivity tick" withough inferring it from the delta</summary>
+    /// <summary>Raised alongside HealthChangedEvent when the change was damage, carrying the source.</summary>
     public readonly struct FighterDamagedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
@@ -45,16 +38,11 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    ///<summary>
-    ///Passivity punishment is interval-based damage during the battle phase
-    ///applied when either the travel-distance check or the 
-    ///time-since-last-action check fails. Raised distinctly from
-    ///FighterDamagedEvent so UI can show a specific "passive" indicator rather
-    ///than just a generic damage number.
-    ///</summary>
+    /// <summary>Raised when a passivity check fails, distinct from FighterDamagedEvent so UI can show a specific "passive" indicator.</summary>
     public readonly struct PassivityDetectedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
+
         public PassivityDetectedEvent(FighterSlot fighter)
         {
             Fighter = fighter;

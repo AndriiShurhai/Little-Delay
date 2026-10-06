@@ -1,20 +1,20 @@
+using System;
+using System.Collections.Generic;
 using Drewio.UnityToolkit.Core;
 using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
 using LittleDelay.Simulation.Fighters;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace LittleDelay.Simulation.Combat
 {
-    ///<summary>
-    /// All projectile movement, collsions, and damage resolution. Replaces the
-    /// old per-projectile Physics-trigger callbacks (Prjoectile.OnTriggerEnter)
-    /// with plain distance checks run centraylly, once per tick, in a fixed
-    /// order - which is itself part of what makes this deterministic: the same
-    /// projectile set in the same order always resolves the same way, unlike
-    /// physics-engine trigger callback ordering.
-    ///</summary>
+    /// <summary>
+    /// All projectile movement, collision and damage resolution. Replaces per-projectile physics
+    /// trigger callbacks with swept distance checks run centrally, once per tick, in a fixed order -
+    /// the same projectile list in the same order always resolves the same way, unlike physics-engine
+    /// callback ordering. Collision tests are swept (segment vs sphere) so a fast projectile cannot
+    /// tunnel through a target between two ticks.
+    /// </summary>
     public sealed class SimCombat
     {
         private readonly SimMatchConfig _config;
@@ -22,17 +22,19 @@ namespace LittleDelay.Simulation.Combat
 
         public SimCombat(SimMatchConfig config, IEventBus eventBus)
         {
-            _config =  config ?? throw new System.ArgumentNullException(nameof(config));
-            _eventBus = eventBus ?? throw new System.ArgumentNullException(nameof(eventBus));
+            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         }
 
-        /// <summary>Integrates position and expires anything that has outlived ProjectileLifetimeSeconds</summary>
+        /// <summary>Integrates position and expires anything that has outlived ProjectileLifeTimeSeconds.</summary>
         public void AdvanceProjectiles(List<SimProjectile> projectiles, float deltaTime)
         {
-            foreach (SimProjectile projectile in projectiles)
+            for (int i = 0; i < projectiles.Count; i++)
             {
+                SimProjectile projectile = projectiles[i];
                 if (projectile.IsExpired) continue;
 
+                projectile.PreviousPosition = projectile.Position;
                 projectile.Position += projectile.Velocity * deltaTime;
                 projectile.ElapsedSeconds += deltaTime;
 
@@ -44,45 +46,12 @@ namespace LittleDelay.Simulation.Combat
             }
         }
 
-        /// <summary>A projectile only ever damages the fighter it wasn't fired by - friendly fire isn't a concept here since each fighter has exactly one opponent</summary>
-        public void ResolveProjectileFighterCollisions(List<SimProjectile> projectiles, SimFighter player, SimFighter opponent)
-        {
-            float hitDistance = _config.ProjectileRadius + _config.FighterHurtboxRadius;
-            float hitDistanceSq = hitDistance * hitDistance;
-
-            foreach (SimProjectile projectile in projectiles)
-            {
-                if (projectile.IsExpired) continue;
-
-                SimFighter target = projectile.Owner == FighterSlot.Player ? opponent : player;
-                if (!target.IsAlive) continue;
-
-                if ((projectile.Position - target.Position).sqrMagnitude > hitDistanceSq) continue;
-
-                ApplyDamage(target, _config.ProjectileDamage, DamageSource.Projectile);
-
-                // Knockback along the projectile's own travel direction. This is 
-                // additive on top of whatever input-driven movement the target's 
-                // recording plays back for the ticks it's active ( see
-                // SimFighter.ApplyDeflection) - once it decays to zero the
-                // recording continues from the pushed position rather than 
-                // snapping back, matching the confirmed playback behaviour.
-                Vector3 knockbackDirection = projectile.Velocity.sqrMagnitude > 0.0001f
-                    ? projectile.Velocity.normalized
-                    : (target.Position - projectile.Position).normalized;
-                target.ApplyDeflection(knockbackDirection * _config.DeflectionKnockbackSpeed, _config.DeflectionDurationSeconds);
-
-                projectile.IsExpired = true;
-                _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.HitFighter));
-            }
-
-        }
-
         /// <summary>
-        /// Opposing projectiles that collide deflect off each other via a
-        /// straightforward vector reflection.
+        /// Opposing projectiles that touch during a tick bounce off each other (vector reflection about the
+        /// contact normal). Swept relative-motion test, resolved at the moment of closest approach, and only
+        /// while the pair is actually closing - so a pair that has just bounced can never re-trigger.
         /// </summary>
-        public void ResolveProjectileProjectileCollisions(List<SimProjectile> projectiles)
+        public void ResolveProjectileProjectileCollisions(List<SimProjectile> projectiles, float deltaTime)
         {
             float combinedRadius = _config.ProjectileRadius * 2f;
             float combinedRadiusSq = combinedRadius * combinedRadius;
@@ -97,15 +66,35 @@ namespace LittleDelay.Simulation.Combat
                     SimProjectile b = projectiles[j];
                     if (b.IsExpired || b.Owner == a.Owner) continue;
 
-                    Vector3 delta = b.Position - a.Position;
-                    if (delta.sqrMagnitude > combinedRadiusSq) continue;
+                    Vector3 relativeStart = b.PreviousPosition - a.PreviousPosition;
+                    Vector3 relativeVelocity = b.Velocity - a.Velocity;
 
-                    Vector3 normal = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector3.forward;
+                    // Only a pair that is actually approaching can collide. Judged from the relative position at the
+                    // START of the tick, so a pair that just bounced (coincident or separating) can never re-trigger.
+                    if (Vector3.Dot(relativeStart, relativeVelocity) >= 0f) continue;
 
-                    Vector3 newVelocityA = ComputeDeflection(a.Velocity, -normal);
+                    Vector3 relativeEnd = b.Position - a.Position;
+                    float t = ClosestApproachFraction(relativeStart, relativeEnd, out float closestDistanceSq);
+                    if (closestDistanceSq > combinedRadiusSq) continue;
+
+                    Vector3 contactA = Vector3.Lerp(a.PreviousPosition, a.Position, t);
+                    Vector3 contactB = Vector3.Lerp(b.PreviousPosition, b.Position, t);
+
+                    // Normal points a -> b. Exactly head-on projectiles are coincident at closest approach,
+                    // so fall back to the approach direction (non-zero, because they are closing).
+                    Vector3 delta = contactB - contactA;
+                    Vector3 normal = delta.sqrMagnitude > 0.000001f ? delta.normalized : relativeStart.normalized;
+
+                    Vector3 newVelocityA = ComputeDeflection(a.Velocity, normal);
                     Vector3 newVelocityB = ComputeDeflection(b.Velocity, normal);
+                    float remaining = (1f - t) * deltaTime;
+
+                    a.PreviousPosition = contactA;
+                    b.PreviousPosition = contactB;
                     a.Velocity = newVelocityA;
                     b.Velocity = newVelocityB;
+                    a.Position = contactA + newVelocityA * remaining;
+                    b.Position = contactB + newVelocityB * remaining;
 
                     _eventBus.Publish(new ProjectileDeflectedEvent(a.Id, newVelocityA));
                     _eventBus.Publish(new ProjectileDeflectedEvent(b.Id, newVelocityB));
@@ -113,22 +102,61 @@ namespace LittleDelay.Simulation.Combat
             }
         }
 
+        /// <summary>A projectile only damages the fighter it wasn't fired by - each fighter has exactly one opponent.</summary>
+        public void ResolveProjectileFighterCollisions(List<SimProjectile> projectiles, SimFighter player, SimFighter opponent)
+        {
+            float hitDistance = _config.ProjectileRadius + _config.FighterHurtboxRadius;
+            float hitDistanceSq = hitDistance * hitDistance;
+
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SimProjectile projectile = projectiles[i];
+                if (projectile.IsExpired) continue;
+
+                SimFighter target = projectile.Owner == FighterSlot.Player ? opponent : player;
+                if (!target.IsAlive) continue;
+
+                Vector3 relativeStart = projectile.PreviousPosition - target.Position;
+                Vector3 relativeEnd = projectile.Position - target.Position;
+                ClosestApproachFraction(relativeStart, relativeEnd, out float closestDistanceSq);
+                if (closestDistanceSq > hitDistanceSq) continue;
+
+                ApplyDamage(target, _config.ProjectileDamage, DamageSource.Projectile);
+
+                // Knockback along the projectile's travel direction, additive on top of whatever input the
+                // target's recording is playing - once it ends the recording simply continues from the pushed position.
+                Vector3 travel = projectile.Velocity;
+                travel.y = 0f;
+                Vector3 knockbackDirection = travel.sqrMagnitude > 0.0001f
+                    ? travel.normalized
+                    : (target.Position - projectile.Position).normalized;
+                target.ApplyDeflection(knockbackDirection * _config.DeflectionKnockbackSpeed, _config.DeflectionDurationSeconds);
+
+                projectile.IsExpired = true;
+                _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.HitFighter));
+            }
+        }
+
         public void ResolveArenaBoundsForProjectiles(List<SimProjectile> projectiles, Vector3 arenaCenter, float arenaRadius)
         {
             float boundsRadius = arenaRadius + _config.ProjectileArenaExitMargin;
-            foreach(SimProjectile projectile in projectiles)
+            float boundsRadiusSq = boundsRadius * boundsRadius;
+
+            for (int i = 0; i < projectiles.Count; i++)
             {
+                SimProjectile projectile = projectiles[i];
                 if (projectile.IsExpired) continue;
 
                 Vector3 offset = projectile.Position - arenaCenter;
-                if (offset.magnitude <= boundsRadius) continue;
+                offset.y = 0f;
+                if (offset.sqrMagnitude <= boundsRadiusSq) continue;
 
                 projectile.IsExpired = true;
                 _eventBus.Publish(new ProjectileDespawnedEvent(projectile.Id, ProjectileDespawnReason.HitArenaBounds));
             }
         }
 
-        /// <summary>Standard vector reflection - deterministic given the same incoming velocity and collision normal, with no random component</summary>
+        /// <summary>Standard vector reflection - deterministic given the same inputs, with no random component.</summary>
         public static Vector3 ComputeDeflection(Vector3 incomingVelocity, Vector3 collisionNormal)
         {
             Vector3 normal = collisionNormal.sqrMagnitude > 0.0001f
@@ -139,11 +167,9 @@ namespace LittleDelay.Simulation.Combat
         }
 
         /// <summary>
-        /// Applies damage and publishes the full event sequence a target expedcts
-        /// (FighterDamagedEvent, thenHealthChangedEevnt, then FighterDiedEvent
-        /// if this was lethal). Used for both projectile hits and passivity
-        /// damage, so every damage path - present and future - stays consistent
-        /// through this one method rather than each caller reimplementing it.
+        /// Applies damage and publishes the full event sequence (FighterDamagedEvent, HealthChangedEvent,
+        /// then FighterDiedEvent if lethal). Used for projectile hits and passivity damage alike, so every
+        /// damage path stays consistent through this one method.
         /// </summary>
         public void ApplyDamage(SimFighter target, float amount, DamageSource source)
         {
@@ -158,6 +184,16 @@ namespace LittleDelay.Simulation.Combat
             {
                 _eventBus.Publish(new FighterDiedEvent(target.Slot, source));
             }
+        }
+
+        /// <summary>Fraction t in [0,1] along the segment start->end at which the point is closest to the origin.</summary>
+        private static float ClosestApproachFraction(Vector3 start, Vector3 end, out float closestDistanceSq)
+        {
+            Vector3 direction = end - start;
+            float lengthSq = direction.sqrMagnitude;
+            float t = lengthSq > 0.00000001f ? Mathf.Clamp01(-Vector3.Dot(start, direction) / lengthSq) : 0f;
+            closestDistanceSq = (start + direction * t).sqrMagnitude;
+            return t;
         }
     }
 }

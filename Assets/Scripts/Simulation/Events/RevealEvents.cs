@@ -1,15 +1,12 @@
-﻿using Drewio.UnityToolkit.Core;
-using System;
-using System.Collections.Generic;
-using System.Numerics;
-using System.Text;
+using Drewio.UnityToolkit.Core;
+using UnityEngine;
 
 namespace LittleDelay.Simulation.Events
 {
     /// <summary>
-    /// A reveal window opened for one fighter's recording: 3 per 20s recording,
-    /// starting at recording start and repeating every 7s, each lasting 2s
-    /// (GDD v0.1). RevealIndex is 0-based (0, 1, 2).
+    /// A reveal window opened: 3 per recording, starting at recording start and repeating
+    /// every 7s, each lasting 2s (GDD v0.1). RevealIndex is 0-based. One event is published
+    /// per fighter being revealed - the HUD shows the opponent's, the AI is told the player's.
     /// </summary>
     public readonly struct RevealWindowStartedEvent : IGameEvent
     {
@@ -38,12 +35,8 @@ namespace LittleDelay.Simulation.Events
     }
 
     /// <summary>
-    /// Published once per tick while a reveal window is active, carrying the
-    /// revealed fighter's real-time recorded position. The reveal format is a
-    /// thick highlighted trail of actual movement (not a zone circle), so the
-    /// view accumulates these points into a trail renderer rather than sampling
-    /// simulation state directly - keeps the reveal visual entirely
-    /// event-driven, consistent with the rest of the presentation layer.
+    /// Published once per tick while a reveal window is active, carrying the revealed
+    /// fighter's real-time position. The view accumulates these into a thick trail.
     /// </summary>
     public readonly struct RevealTrailPointEvent : IGameEvent
     {
@@ -56,18 +49,32 @@ namespace LittleDelay.Simulation.Events
             RevealedFighter = revealedFighter;
             RevealIndex = revealIndex;
             Position = position;
-        }   
+        }
+    }
+
+    /// <summary>The enemy's spawn point is shown for the duration of the pre-recording countdown.</summary>
+    public readonly struct SpawnRevealedEvent : IGameEvent
+    {
+        public readonly FighterSlot Fighter;
+        public readonly Vector3 Position;
+        public readonly float Duration;
+
+        public SpawnRevealedEvent(FighterSlot fighter, Vector3 position, float duration)
+        {
+            Fighter = fighter;
+            Position = position;
+            Duration = duration;
+        }
     }
 
     /// <summary>
-    /// Future feature (GDD v0.1: not yet implemented) - the player's own spawn
-    /// point pulsates during the pre-recording countdown once spawn-point choice
-    /// on a minimap exists. Only ever raised for FighterSlot.Player, never the
-    /// opponent's spawn.
+    /// Future feature (GDD v0.1: not implemented) - the player's own spawn point pulsates during
+    /// the pre-recording countdown once spawn-point choice on a minimap exists. Only ever for FighterSlot.Player.
     /// </summary>
     public readonly struct SpawnPointPulseStartedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
+
         public SpawnPointPulseStartedEvent(FighterSlot fighter)
         {
             Fighter = fighter;

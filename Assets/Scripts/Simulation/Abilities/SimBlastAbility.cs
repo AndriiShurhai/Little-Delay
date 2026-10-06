@@ -1,23 +1,17 @@
-﻿using Drewio.UnityToolkit.Core;
-using LittleDelay.Simulation;
-using LittleDelay.Simulation.Abilities;
+using System;
+using Drewio.UnityToolkit.Core;
 using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
 using LittleDelay.Simulation.Fighters;
-using System;
 using UnityEngine;
 
 namespace LittleDelay.Simulation.Abilities
 {
-    ///<summary>
-    /// The prototype's single weapon: a small, high-fire-rate projectile fired
-    /// along the fighter's current aim direaction. Replaces the old
-    /// MonoBehaviour BlastAbility - no direct Instantiate here at all; spawning
-    /// goes through SimWorld.SpawnProjectile, which publishes
-    /// ProjectileSpawnedEvent for ProjectileView to pull an instance
-    /// from it GameObject pool.
-    ///</summary>
-    
+    /// <summary>
+    /// The prototype's single weapon: a small, high-fire-rate projectile along the fighter's aim
+    /// direction. No Instantiate anywhere - spawning goes through SimWorld.SpawnProjectile, which
+    /// publishes ProjectileSpawnedEvent for the view layer's pool.
+    /// </summary>
     public sealed class SimBlastAbility : SimAbility
     {
         public const string Id = "Blast";
@@ -26,9 +20,9 @@ namespace LittleDelay.Simulation.Abilities
         private readonly SimMatchConfig _config;
 
         public SimBlastAbility(FighterSlot ownerSlot, IEventBus eventBus, SimMatchConfig config)
-            : base(ownerSlot, eventBus, config.BlastAbilityCooldownSeconds)
+            : base(ownerSlot, eventBus, (config ?? throw new ArgumentNullException(nameof(config))).BlastAbilityCooldownSeconds)
         {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
+            _config = config;
         }
 
         protected override void OnUse(SimFighter owner, SimWorld world)

@@ -1,24 +1,17 @@
+using System;
 using Drewio.UnityToolkit.Core;
 using Drewio.UnityToolkit.Timers;
+using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
 using LittleDelay.Simulation.Fighters;
-using System;
-using Unity.Multiplayer.Center.Common;
-using UnityEngine;
 
 namespace LittleDelay.Simulation.Abilities
 {
     /// <summary>
-    /// Pure C# ability, replacing the old BaseAbility MonoBehaviour: no 
-    /// inheritance from MonoBehaviour, no Update() ticking - cooldown tracking
-    /// is the toolkit's own Cooldown (pull-model NormalizedRemaining for UI,
-    /// push-model Ready event for one-shot cues), ticked explicitly by SimWorld
-    /// alongside everything else in the fixed-tick loop.
-    /// 
-    /// One instance per owning fighter (constructed with that fighter's 
-    /// FighterSlot at construction time), so its Cooldown state is never shared
-    /// between the two fighters the way a MonoBehaviour-per-prefab-instance
-    /// pattern might accidentally allow.
+    /// Pure C# ability (replaces the old BaseAbility MonoBehaviour): no Update(), no MonoBehaviour.
+    /// Cooldown tracking is the toolkit's Cooldown - pull-model NormalizedRemaining for UI, push-model
+    /// Ready event for one-shot cues - ticked explicitly by SimWorld inside the fixed-tick loop.
+    /// One instance per owning fighter, so cooldown state is never shared between the two fighters.
     /// </summary>
     public abstract class SimAbility
     {
@@ -30,8 +23,11 @@ namespace LittleDelay.Simulation.Abilities
 
         public bool IsReady => _cooldown.IsReady;
 
-        ///<summary>1 right after use, 0 once ready - smaple this every frame for a cooldown fill, no evnt wiring needed.</summary>
+        /// <summary>1 right after use, 0 once ready - sample every frame for a cooldown fill, no event wiring needed.</summary>
         public float NormalizedRemaining => _cooldown.NormalizedRemaining;
+
+        public float CooldownDuration => _cooldown.Duration;
+
         protected SimAbility(FighterSlot ownerSlot, IEventBus eventBus, float cooldownSeconds)
         {
             OwnerSlot = ownerSlot;
@@ -43,17 +39,20 @@ namespace LittleDelay.Simulation.Abilities
         public void Tick(float deltaTime) => _cooldown.Tick(deltaTime);
 
         /// <summary>
-        /// Attempts to use the ability. On success, consumes the cooldown,
-        /// invokes the subclass's gameplay effect, and published
-        /// AbilityUsedEvent and AbilityCooldownStartedEvent. On failure, publishes
-        /// AbilityFailedEvent instead - the input is never
-        /// silently swallowed, so UI/Audio can always give feedback either way.
+        /// Attempts to use the ability. On success: consumes the cooldown, runs the gameplay effect, and
+        /// publishes AbilityUsedEvent + AbilityCooldownStartedEvent. On failure: publishes AbilityFailedEvent
+        /// when reportFailure is set (SimWorld passes true only on the input's rising edge so a held button
+        /// does not spam the bus).
         /// </summary>
-        public bool TryUse(SimFighter owner, SimWorld world)
+        public bool TryUse(SimFighter owner, SimWorld world, bool reportFailure = true)
         {
             if (!_cooldown.TryConsume())
             {
-                _eventBus.Publish(new AbilityFailedEvent(OwnerSlot, AbilityId, AbilityFailureReason.OnCooldown));
+                if (reportFailure)
+                {
+                    _eventBus.Publish(new AbilityFailedEvent(OwnerSlot, AbilityId, AbilityFailureReason.OnCooldown));
+                }
+
                 return false;
             }
 
@@ -64,7 +63,7 @@ namespace LittleDelay.Simulation.Abilities
             return true;
         }
 
-        ///<summary>The actual gameplay effect</summary>
+        /// <summary>The actual gameplay effect.</summary>
         protected abstract void OnUse(SimFighter owner, SimWorld world);
     }
 }

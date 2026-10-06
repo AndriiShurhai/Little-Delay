@@ -1,35 +1,30 @@
-﻿using LittleDelay.Simulation.Core;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using Unity.VisualScripting;
-using UnityEngine.EventSystems;
+using LittleDelay.Simulation.Core;
 using UnityEngine;
 
 namespace LittleDelay.Simulation.Fighters
 {
     /// <summary>
-    /// Pure, stateless kinmatic movement math. Delibaretely does not touch
-    /// Rigidbody/PhysX - per the determinism requirements, neither is guaranteed
-    /// bit-for-bit reproducible, so fighter movement is a simple, auditable
-    /// integrator isntead: velocity from input, position += velocity * dt,
-    /// clamped to the current arena radius. The old inward-moving wall colliders
-    /// become a deterministic clamp against a shrinking radius computed straight
-    /// from elapsed round time - no physics push involved
+    /// Pure, stateless kinematic movement math. Deliberately avoids Rigidbody/PhysX (not guaranteed
+    /// reproducible): velocity from input, position += velocity * dt, clamped to the arena radius.
+    /// The old inward-moving wall colliders become a clamp against a radius that is a pure function
+    /// of round number and elapsed battle time.
     /// </summary>
-    /// 
     public static class SimMovement
     {
-        public static Vector3 ComputeVelocity(SimInputFrame input, SimMatchConfig config)
+        public static Vector3 ClampMoveInput(Vector3 moveDirection)
         {
-            Vector3 moveDirection = input.MoveDirection;
             moveDirection.y = 0f;
-
             if (moveDirection.sqrMagnitude > 1f)
             {
                 moveDirection.Normalize();
             }
-            return moveDirection * config.FighterMoveSpeed;
+
+            return moveDirection;
+        }
+
+        public static Vector3 ComputeVelocity(Vector3 clampedMoveDirection, SimMatchConfig config)
+        {
+            return clampedMoveDirection * config.FighterMoveSpeed;
         }
 
         public static Vector3 Integrate(Vector3 currentPosition, Vector3 velocity, float deltaTime)
@@ -37,7 +32,7 @@ namespace LittleDelay.Simulation.Fighters
             return currentPosition + velocity * deltaTime;
         }
 
-        /// <summary>Deterministic replacement for the old physical arena walls: pushes a position back to the arena boundary along the same direaction it exceeded it from.</summary>
+        /// <summary>Pushes a position back onto the arena boundary along the direction it exceeded it from.</summary>
         public static Vector3 ClampToArena(Vector3 position, Vector3 arenaCenter, float arenaRadius)
         {
             Vector3 offset = position - arenaCenter;
@@ -54,11 +49,30 @@ namespace LittleDelay.Simulation.Fighters
             return clamped;
         }
 
-        ///<summary>Arena radius as a pure function of elapsed round time - smae input always produces the same radius, unlike a physically-simulated shrinking wall.</summary>
-        public static float ComputeArenaRadius(SimMatchConfig config, float roundElapsedSeconds)
+        /// <summary>Radius at the start of a round: shrinks a fixed amount per round, never below the minimum.</summary>
+        public static float ComputeRoundStartRadius(SimMatchConfig config, int roundNumber)
         {
-            float shrunkRadius = config.ArenaInitialRadius - config.ArenaShringRatePerSecond * roundElapsedSeconds;
-            return Mathf.Max(config.ArenaMinRadius, shrunkRadius);
+            float radius = config.ArenaInitialRadius - config.ArenaShrinkPerRound * Mathf.Max(0, roundNumber - 1);
+            return Mathf.Max(config.ArenaMinRadius, radius);
+        }
+
+        /// <summary>Radius during a battle: round-start radius minus continuous shrink over elapsed battle time.</summary>
+        public static float ComputeBattleRadius(SimMatchConfig config, int roundNumber, float battleElapsedSeconds)
+        {
+            float radius = ComputeRoundStartRadius(config, roundNumber) - config.ArenaShrinkRatePerSecond * battleElapsedSeconds;
+            return Mathf.Max(config.ArenaMinRadius, radius);
+        }
+
+        /// <summary>Reduces a vector's length by amount (never past zero) without changing its direction.</summary>
+        public static Vector3 DecayToZero(Vector3 velocity, float amount)
+        {
+            float magnitude = velocity.magnitude;
+            if (magnitude <= amount || magnitude <= 0.0001f)
+            {
+                return Vector3.zero;
+            }
+
+            return velocity * ((magnitude - amount) / magnitude);
         }
     }
 }

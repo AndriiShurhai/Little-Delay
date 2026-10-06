@@ -1,5 +1,5 @@
-﻿using UnityEngine;
 using Drewio.UnityToolkit.Core;
+using UnityEngine;
 
 namespace LittleDelay.Simulation.Events
 {
@@ -16,7 +16,7 @@ namespace LittleDelay.Simulation.Events
         Expired
     }
 
-    /// <summary>Raised the tick an abilit successfully fires (cooldown consumed). Ability identity is a string is so new abilities never require a new event type</summary>
+    /// <summary>Raised the tick an ability successfully fires (cooldown consumed). Ability identity is a string so new abilities never need a new event type.</summary>
     public readonly struct AbilityUsedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
@@ -29,7 +29,10 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    ///<summary>Raised when an ability use is rejected (e.g. still on cooldown) so UI/audio can give feedback withough simulation silently swallowing the input.</summary>
+    /// <summary>
+    /// Raised when an ability use is rejected (e.g. still on cooldown) so UI/audio can give feedback.
+    /// Only published on the rising edge of the input (the tick a held button starts asking), not on every held tick.
+    /// </summary>
     public readonly struct AbilityFailedEvent : IGameEvent
     {
         public readonly FighterSlot Fighter;
@@ -59,9 +62,8 @@ namespace LittleDelay.Simulation.Events
     }
 
     /// <summary>
-    /// Raised the moment a cooldown becomes ready again. UI does NOT need this to
-    /// draw the fill - AbilitySlotUI samples CooldownNomralizedRemaining every
-    /// frame (pull model) - but it's useful for a one-shot "ready" flash/SFX cue.
+    /// Raised the moment a cooldown becomes ready again. UI does not need this to draw
+    /// the fill (it samples NormalizedRemaining every frame) - it is for one-shot cues.
     /// </summary>
     public readonly struct AbilityReadyEvent : IGameEvent
     {
@@ -75,11 +77,7 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    /// <summary>
-    /// Raised by simulation spawning (never by a View calling Instantiate
-    /// directly) when a projectile enters the sim. ProectileView listens for
-    /// this to pull an instance from its GameObjectPool and snap it to Position.
-    /// </summary>
+    /// <summary>Raised by simulation spawning when a projectile enters the world; ProjectileViewManager pulls a pooled view for it.</summary>
     public readonly struct ProjectileSpawnedEvent : IGameEvent
     {
         public readonly int ProjectileId;
@@ -95,7 +93,8 @@ namespace LittleDelay.Simulation.Events
             Velocity = velocity;
         }
     }
-    /// <summary>Raised on deflection so presentation can play an impact/redirect VFX without owning any deflection math itself (that math is a simulation determinism concern - Phase 2/3).</summary>
+
+    /// <summary>Raised on projectile-vs-projectile deflection so presentation can play impact VFX without owning any deflection math.</summary>
     public readonly struct ProjectileDeflectedEvent : IGameEvent
     {
         public readonly int ProjectileId;
@@ -108,7 +107,7 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    /// <summary>ProjectileView listens for this to Release() its instance back to the GameObjectPool - simulation decides the projectile's lifetime is over, view never decides that on its own.</summary>
+    /// <summary>The simulation decides a projectile's life is over; the view releases its pooled instance in response.</summary>
     public readonly struct ProjectileDespawnedEvent : IGameEvent
     {
         public readonly int ProjectileId;
@@ -120,5 +119,4 @@ namespace LittleDelay.Simulation.Events
             Reason = reason;
         }
     }
-
 }

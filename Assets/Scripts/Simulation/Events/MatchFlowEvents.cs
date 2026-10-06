@@ -2,15 +2,7 @@ using Drewio.UnityToolkit.Core;
 
 namespace LittleDelay.Simulation.Events
 {
-    /// <summary>
-    /// Identifies which side of a 1v1 match a fighter-scoped event refers to.
-    /// The prototype is strictly two-fighter (player + AI, or player + player
-    /// once online multiplayer lands), so a named enum reads better at every call
-    /// site than a raw index and avoids off-by-one mixups between the two slots.
-    /// If/when the roster grows beyond two, this becomes a FighterID value type
-    /// instead - not a concern for Phase 1.
-    /// </summary>
-    
+    /// <summary>Which side of the 1v1 a fighter-scoped event refers to.</summary>
     public enum FighterSlot
     {
         Player = 0,
@@ -21,28 +13,51 @@ namespace LittleDelay.Simulation.Events
     {
         PlayerWin,
         OpponentWin,
-        Draw
+        Draw,
+        /// <summary>Both recordings ran out and nobody died. Not a result by itself - SimMatch decides whether another round follows.</summary>
+        NoKill
     }
 
-    /// <summary> Raised once when a new match begins, before ShowdownPreview. </summary>
+    /// <summary>Raised once when a new match begins (after the showdown preview).</summary>
     public readonly struct MatchStartedEvent : IGameEvent
     {
-        public readonly int RoundsToWin;
-        public MatchStartedEvent(int roundsToWin) => RoundsToWin = roundsToWin;
+        public readonly int MaxRounds;
+        public MatchStartedEvent(int maxRounds) => MaxRounds = maxRounds;
     }
 
-    /// <summary>
-    /// Pre-recording countdown, during which the player's own spawn point
-    /// pulsates (see SpawnPointPulseStartedEvent in RevealEvents.cs) - future
-    /// feature, once spawn-point choice on a minimap exists.
-    /// </summary>
+    public readonly struct ShowdownPreviewStartedEvent : IGameEvent
+    {
+        public readonly float Duration;
+        public ShowdownPreviewStartedEvent(float duration) => Duration = duration;
+    }
+
+    /// <summary>A new round begins (its recording world has just been created).</summary>
+    public readonly struct RoundStartedEvent : IGameEvent
+    {
+        public readonly int RoundNumber;
+        public readonly int MaxRounds;
+
+        public RoundStartedEvent(int roundNumber, int maxRounds)
+        {
+            RoundNumber = roundNumber;
+            MaxRounds = maxRounds;
+        }
+    }
+
+    /// <summary>Pre-recording countdown, during which the enemy's spawn is revealed (and, later, the player's own spawn pulses).</summary>
     public readonly struct PreRecordingCountdownStartedEvent : IGameEvent
     {
         public readonly float Duration;
         public PreRecordingCountdownStartedEvent(float duration) => Duration = duration;
     }
 
-    ///<summary>Recording phase started for both fighters simultaneously. Duration is the full 20s window</summary>
+    /// <summary>Whole-second tick shared by both countdowns (3, 2, 1). Discrete, so event-driven; continuous timers are pulled instead.</summary>
+    public readonly struct CountdownTickEvent : IGameEvent
+    {
+        public readonly int SecondsRemaining;
+        public CountdownTickEvent(int secondsRemaining) => SecondsRemaining = secondsRemaining;
+    }
+
     public readonly struct RecordingStartedEvent : IGameEvent
     {
         public readonly float Duration;
@@ -53,9 +68,17 @@ namespace LittleDelay.Simulation.Events
     {
     }
 
-    /// <summary>Camera swaps form the third-person view to the arena view. Cinemachine handles the blend.</summary>
-    public readonly struct ArenaCameraTrnasitionStartedEvent : IGameEvent
+    public enum CameraView
     {
+        Player,
+        Arena
+    }
+
+    /// <summary>The flow asks for a camera swap; Cinemachine handles the blend, the flow waits for it to finish.</summary>
+    public readonly struct CameraViewRequestedEvent : IGameEvent
+    {
+        public readonly CameraView View;
+        public CameraViewRequestedEvent(CameraView view) => View = view;
     }
 
     public readonly struct RoundCountdownStartedEvent : IGameEvent
@@ -70,18 +93,19 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    ///<summary>Battle playback(both recordings replaying simultaneously) has started for this round</summary>
+    /// <summary>Battle playback (both recordings replaying simultaneously) has started for this round.</summary>
     public readonly struct BattleStartedEvent : IGameEvent
     {
         public readonly int RoundNumber;
         public BattleStartedEvent(int roundNumber) => RoundNumber = roundNumber;
     }
 
-    ///<summary>One round resolved. Simultaneous death (both fighters die on the same tick) resolves as Draw.</summary>
+    /// <summary>One battle resolved. Simultaneous death on the same tick is a Draw; NoKill means the recordings ran out.</summary>
     public readonly struct RoundEndedEvent : IGameEvent
     {
         public readonly int RoundNumber;
         public readonly RoundOutcome Outcome;
+
         public RoundEndedEvent(int roundNumber, RoundOutcome outcome)
         {
             RoundNumber = roundNumber;
@@ -89,11 +113,12 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    ///<summary>Whoever wins a round wins the match outright</summary>
+    /// <summary>Whoever kills the opponent in any round wins the match outright; Draw covers simultaneous death and "no kill after the last round".</summary>
     public readonly struct MatchEndedEvent : IGameEvent
     {
         public readonly RoundOutcome Outcome;
         public readonly int RoundNumber;
+
         public MatchEndedEvent(RoundOutcome outcome, int roundNumber)
         {
             Outcome = outcome;
