@@ -179,6 +179,10 @@ namespace LittleDelay.Simulation.Flow
         private SimSpawn NextSpawn(SimFighter fighter, float nextRadius)
         {
             Vector3 position = SimMovement.ClampToArena(fighter.Position, _arenaCenter, nextRadius);
+
+            // A round can end mid-jump. The next round starts on the ground, and the spawn height is what the
+            // new fighter treats as its ground, so never carry an airborne height over.
+            position.y = fighter.GroundHeight;
             return new SimSpawn(position, fighter.AimDirection);
         }
 

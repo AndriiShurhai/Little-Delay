@@ -20,6 +20,8 @@ namespace LittleDelay.Simulation.Fighters
         public float MaxHealth { get; }
 
         public Vector3 Position { get; private set; }
+
+        /// <summary>Horizontal (XZ) velocity this tick. Vertical motion lives in VerticalVelocity so reveal intel and passivity are unaffected by jumping.</summary>
         public Vector3 Velocity { get; private set; }
         public Vector3 AimDirection { get; private set; }
 
@@ -40,6 +42,14 @@ namespace LittleDelay.Simulation.Fighters
         /// <summary>Non-zero only while a dash is decaying.</summary>
         public Vector3 DashVelocity { get; private set; }
 
+        /// <summary>The height the fighter stands at (its spawn height). Jumps start from and land back on exactly this.</summary>
+        public float GroundHeight { get; }
+
+        /// <summary>Upward speed in m/s; 0 on the ground.</summary>
+        public float VerticalVelocity { get; private set; }
+
+        public bool IsGrounded => Position.y <= GroundHeight;
+
         public IReadOnlyList<SimAbility> Abilities => _abilityList;
 
         internal SimPassivityTracker PassivityTracker { get; } = new();
@@ -53,6 +63,7 @@ namespace LittleDelay.Simulation.Fighters
             Slot = slot;
             Position = spawnPosition;
             PreviousPosition = spawnPosition;
+            GroundHeight = spawnPosition.y;
             MaxHealth = maxHealth;
             CurrentHealth = startHealth > 0f ? Mathf.Min(startHealth, maxHealth) : maxHealth;
 
@@ -98,6 +109,17 @@ namespace LittleDelay.Simulation.Fighters
         {
             Position = position;
             Velocity = velocity;
+        }
+
+        /// <summary>Takes off. Callers check IsGrounded first; the actual rise happens in the same tick's vertical integration.</summary>
+        internal void StartJump(float jumpSpeed)
+        {
+            VerticalVelocity = jumpSpeed;
+        }
+
+        internal void SetVerticalVelocity(float verticalVelocity)
+        {
+            VerticalVelocity = verticalVelocity;
         }
 
         /// <summary>

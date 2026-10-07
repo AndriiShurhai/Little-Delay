@@ -32,6 +32,33 @@ namespace LittleDelay.Simulation.Fighters
             return currentPosition + velocity * deltaTime;
         }
 
+        /// <summary>
+        /// One fixed step of vertical motion (semi-implicit Euler: velocity first, then position). A fighter that is
+        /// on the ground and not moving up is returned untouched, so jump-free play is bit-for-bit what it was before
+        /// jumping existed. Landing snaps exactly to groundHeight and zeroes the velocity. gravity must be positive
+        /// (SimWorld never starts a jump otherwise), or a rising fighter would never come down.
+        /// </summary>
+        public static void IntegrateVertical(
+            float height, float verticalVelocity, float groundHeight, float gravity, float deltaTime,
+            out float newHeight, out float newVerticalVelocity)
+        {
+            if (height <= groundHeight && verticalVelocity <= 0f)
+            {
+                newHeight = height;
+                newVerticalVelocity = 0f;
+                return;
+            }
+
+            newVerticalVelocity = verticalVelocity - gravity * deltaTime;
+            newHeight = height + newVerticalVelocity * deltaTime;
+
+            if (newHeight <= groundHeight)
+            {
+                newHeight = groundHeight;
+                newVerticalVelocity = 0f;
+            }
+        }
+
         /// <summary>Pushes a position back onto the arena boundary along the direction it exceeded it from.</summary>
         public static Vector3 ClampToArena(Vector3 position, Vector3 arenaCenter, float arenaRadius)
         {

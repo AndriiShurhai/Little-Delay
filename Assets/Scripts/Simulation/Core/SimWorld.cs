@@ -91,7 +91,7 @@ namespace LittleDelay.Simulation.Core
 
         /// <summary>
         /// Advances one fixed step. Order is part of the contract and never varies:
-        /// fighters (Player, then Opponent) -> projectile movement -> projectile/projectile bounce ->
+        /// fighters (Player, then Opponent; each: abilities -> jump takeoff -> horizontal move -> vertical move) -> projectile movement -> projectile/projectile bounce ->
         /// projectile/fighter hits (Battle only) -> arena bounds -> passivity (Battle only) -> cleanup -> outcome.
         /// </summary>
         public void Tick(SimInputFrame playerInput, SimInputFrame opponentInput)
@@ -168,6 +168,14 @@ namespace LittleDelay.Simulation.Core
                 fighter.FireWasRequested = input.FirePrimary;
             }
 
+            // Jump: takes off from the ground only (no double jump, no buffering). It deliberately does NOT set
+            // actionTaken - otherwise hopping in place would satisfy the passivity check that abilities are meant to satisfy.
+            // A non-positive JumpSpeed or JumpGravity disables jumping (the latter so a bad config can't leave anyone floating forever).
+            if (input.Jump && _config.JumpSpeed > 0f && _config.JumpGravity > 0f && fighter.IsGrounded)
+            {
+                fighter.StartJump(_config.JumpSpeed);
+            }
+
             // Dash is a chosen movement; knockback is not. Passivity only counts the former.
             Vector3 chosenVelocity = SimMovement.ComputeVelocity(move, _config) + fighter.DashVelocity;
             Vector3 totalVelocity = chosenVelocity + fighter.DeflectionVelocity;
@@ -175,7 +183,14 @@ namespace LittleDelay.Simulation.Core
             Vector3 next = SimMovement.Integrate(fighter.Position, totalVelocity, dt);
             next = SimMovement.ClampToArena(next, ArenaCenter, ArenaRadius);
 
+            // Vertical motion is independent of the horizontal math above, which never touches y.
+            SimMovement.IntegrateVertical(
+                next.y, fighter.VerticalVelocity, fighter.GroundHeight, _config.JumpGravity, dt,
+                out float height, out float verticalVelocity);
+            next.y = height;
+
             fighter.SetMotion(next, totalVelocity);
+            fighter.SetVerticalVelocity(verticalVelocity);
             chosenDistance = chosenVelocity.magnitude * dt;
         }
 

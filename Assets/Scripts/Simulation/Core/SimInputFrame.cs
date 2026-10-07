@@ -22,12 +22,19 @@ namespace LittleDelay.Simulation.Core
         /// <summary>Level-triggered request for the mobility ability (dash).</summary>
         public readonly bool UseMobility;
 
-        public SimInputFrame(Vector3 moveDirection, Vector3 aimDirection, bool firePrimary, bool useMobility = false)
+        /// <summary>
+        /// Level-triggered request to jump. Only takes effect while the fighter is on the ground, so a jump pressed
+        /// mid-air is ignored (no buffering, no double jump), and a stream that holds it hops again on every landing.
+        /// </summary>
+        public readonly bool Jump;
+
+        public SimInputFrame(Vector3 moveDirection, Vector3 aimDirection, bool firePrimary, bool useMobility = false, bool jump = false)
         {
             MoveDirection = moveDirection;
             AimDirection = aimDirection;
             FirePrimary = firePrimary;
             UseMobility = useMobility;
+            Jump = jump;
         }
 
         /// <summary>No movement, no input, no facing change - a fighter that did nothing this tick.</summary>

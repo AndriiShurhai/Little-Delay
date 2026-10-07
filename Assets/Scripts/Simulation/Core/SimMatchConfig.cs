@@ -34,6 +34,12 @@ namespace LittleDelay.Simulation.Core
         public float FighterMoveSpeed = 6f;
         public float FighterHurtboxRadius = 0.5f;
 
+        [Header("Jump")]
+        [Tooltip("Initial upward speed (m/s). 0 disables jumping. Peak height is roughly speed^2 / (2 * gravity).")]
+        public float JumpSpeed = 8f;
+        [Tooltip("Downward acceleration while airborne (m/s^2), must be above 0 or jumping is disabled. Airtime is roughly 2 * speed / gravity.")]
+        public float JumpGravity = 28f;
+
         [Header("Blast Ability")]
         public float BlastAbilityCooldownSeconds = 0.5f;
         public float ProjectileSpeed = 20f;
