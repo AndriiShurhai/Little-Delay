@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace LittleDelay.Simulation.Core
@@ -8,36 +10,93 @@ namespace LittleDelay.Simulation.Core
     /// reaching SimWorld, so SimWorld never knows (or cares) which one produced a frame.
     /// MoveDirection and AimDirection are separate (aim-facing/strafe model).
     /// </summary>
-    public readonly struct SimInputFrame
+    [Serializable]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public readonly struct SimInputFrame : IEquatable<SimInputFrame>
     {
-        /// <summary>XZ-plane direction, magnitude expected in [0, 1]; SimMovement clamps if it isn't.</summary>
-        public readonly Vector3 MoveDirection;
+        public const byte ButtonFirePrimary = 1 << 0;
+        public const byte ButtonAbility1 = 1 << 1;
+        public const byte ButtonAbility2 = 1 << 2;
+        public const byte ButtonJump = 1 << 3;
 
-        /// <summary>XZ-plane facing/aim direction. Zero means "keep the fighter's current aim".</summary>
-        public readonly Vector3 AimDirection;
+        public readonly sbyte MoveX;
+        public readonly sbyte MoveZ;
+        public readonly short AimX;
+        public readonly short AimY;
+        public readonly short AimZ;
+        public readonly byte Buttons;
 
-        /// <summary>Level-triggered ("fire is wanted this tick"), not edge-triggered - a held button is true every tick.</summary>
-        public readonly bool FirePrimary;
+        /// <summary>XZ-plane direction decoded from quantized sbytes.</summary>
+        public Vector3 MoveDirection => SimInputQuantizer.DecodeMove(MoveX, MoveZ);
 
-        /// <summary>Level-triggered request for the mobility ability (dash).</summary>
-        public readonly bool UseMobility;
+        /// <summary>3D aim direction decoded from quantized shorts. Zero means "keep current aim".</summary>
+        public Vector3 AimDirection => SimInputQuantizer.DecodeAim(AimX, AimY, AimZ);
 
-        /// <summary>
-        /// Level-triggered request to jump. Only takes effect while the fighter is on the ground, so a jump pressed
-        /// mid-air is ignored (no buffering, no double jump), and a stream that holds it hops again on every landing.
-        /// </summary>
-        public readonly bool Jump;
+        public bool FirePrimary => (Buttons & ButtonFirePrimary) != 0;
+        public bool UseAbility1 => (Buttons & ButtonAbility1) != 0;
+        public bool UseAbility2 => (Buttons & ButtonAbility2) != 0;
 
-        public SimInputFrame(Vector3 moveDirection, Vector3 aimDirection, bool firePrimary, bool useMobility = false, bool jump = false)
+        /// <summary>Alias for UseAbility1 so existing single-mobility code continues to read cleanly.</summary>
+        public bool UseMobility => UseAbility1;
+
+        public bool Jump => (Buttons & ButtonJump) != 0;
+
+        public SimInputFrame(
+            Vector3 moveDirection,
+            Vector3 aimDirection,
+            bool firePrimary,
+            bool useAbility1 = false,
+            bool jump = false,
+            bool useAbility2 = false)
         {
-            MoveDirection = moveDirection;
-            AimDirection = aimDirection;
-            FirePrimary = firePrimary;
-            UseMobility = useMobility;
-            Jump = jump;
+            if (moveDirection.sqrMagnitude > 1f) moveDirection.Normalize();
+            MoveX = SimInputQuantizer.EncodeAxis8(moveDirection.x);
+            MoveZ = SimInputQuantizer.EncodeAxis8(moveDirection.z);
+
+            if (aimDirection.sqrMagnitude > 0.0001f)
+            {
+                Vector3 normAim = aimDirection.normalized;
+                AimX = SimInputQuantizer.EncodeAxis16(normAim.x);
+                AimY = SimInputQuantizer.EncodeAxis16(normAim.y);
+                AimZ = SimInputQuantizer.EncodeAxis16(normAim.z);
+            }
+            else
+            {
+                AimX = 0;
+                AimY = 0;
+                AimZ = 0;
+            }
+
+            byte buttons = 0;
+            if (firePrimary) buttons |= ButtonFirePrimary;
+            if (useAbility1) buttons |= ButtonAbility1;
+            if (useAbility2) buttons |= ButtonAbility2;
+            if (jump) buttons |= ButtonJump;
+            Buttons = buttons;
         }
 
-        /// <summary>No movement, no input, no facing change - a fighter that did nothing this tick.</summary>
+        public SimInputFrame(sbyte moveX, sbyte moveZ, short aimX, short aimY, short aimZ, byte buttons)
+        {
+            MoveX = moveX;
+            MoveZ = moveZ;
+            AimX = aimX;
+            AimY = aimY;
+            AimZ = aimZ;
+            Buttons = buttons;
+        }
+
         public static readonly SimInputFrame None = default;
+
+        public bool Equals(SimInputFrame other) =>
+            MoveX == other.MoveX &&
+            MoveZ == other.MoveZ &&
+            AimX == other.AimX &&
+            AimY == other.AimY &&
+            AimZ == other.AimZ &&
+            Buttons == other.Buttons;
+
+        public override bool Equals(object obj) => obj is SimInputFrame other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(MoveX, MoveZ, AimX, AimY, AimZ, Buttons);
     }
 }

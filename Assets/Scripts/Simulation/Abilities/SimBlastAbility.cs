@@ -27,7 +27,8 @@ namespace LittleDelay.Simulation.Abilities
 
         protected override void OnUse(SimFighter owner, SimWorld world)
         {
-            Vector3 spawnPosition = owner.Position + owner.AimDirection * _config.ProjectileSpawnOffset;
+            Vector3 muzzlePosition = owner.Position + Vector3.up * _config.FighterAimHeight;
+            Vector3 spawnPosition = muzzlePosition + owner.AimDirection * _config.ProjectileSpawnOffset;
             Vector3 velocity = owner.AimDirection * _config.ProjectileSpeed;
             world.SpawnProjectile(owner.Slot, spawnPosition, velocity);
         }

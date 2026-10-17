@@ -28,7 +28,7 @@ namespace LittleDelay.Composition
 
         // Field name kept as-is (typo included) so existing serialized data in your scene is not lost.
         [Tooltip("Every SFX referenced by name from anywhere in the project.")]
-        [SerializeField] private List<SoundDefinition> _sfxDefinisitons = new();
+        [SerializeField] private List<SoundDefinition> _sfxDefinitions = new();
 
         [SerializeField] private AudioMixerGroup _musicMixerGroup;
         [SerializeField] private AudioMixerGroup _sfxMixerGroup;
@@ -74,7 +74,7 @@ namespace LittleDelay.Composition
             Services.Register(_sceneLoadingService);
 
             var musicBank = new SoundBank(_musicDefinitions);
-            var sfxBank = new SoundBank(_sfxDefinisitons);
+            var sfxBank = new SoundBank(_sfxDefinitions);
             _audioService = new AudioPlaybackService(
                 eventBus,
                 musicBank,

@@ -46,30 +46,36 @@ namespace LittleDelay.Simulation.AI
             float ageSeconds = Mathf.Min(Mathf.Max(0, tickIndex - intel.ObservedTick) * _dt, _ai.PredictionHorizonSeconds);
             Vector3 predicted = intel.Position + intel.Velocity * ageSeconds;
 
-            Vector3 toTarget = predicted - _self.Position;
-            toTarget.y = 0f;
-            float distance = toTarget.magnitude;
-            if (distance < 0.0001f) return SimInputFrame.None;
+            Vector3 toTarget3D = predicted - _self.Position;
+            float distance3D = toTarget3D.magnitude;
+            if (distance3D < 0.0001f) return SimInputFrame.None;
 
-            Vector3 aim = toTarget / distance;
+            // Full 3D aim so the bot can shoot upward at a jumping opponent or downward if elevated.
+            Vector3 aim = toTarget3D / distance3D;
 
-            float radial = distance > _ai.EngageDistance ? 1f : (distance < _ai.RetreatDistance ? -1f : 0f);
+            // Horizontal plane vector for ground movement and strafing.
+            Vector3 toTargetFlat = new Vector3(toTarget3D.x, 0f, toTarget3D.z);
+            float flatDistance = toTargetFlat.magnitude;
+            Vector3 flatDir = flatDistance > 0.0001f ? toTargetFlat / flatDistance : Vector3.forward;
+
+            float radial = flatDistance > _ai.EngageDistance ? 1f : (flatDistance < _ai.RetreatDistance ? -1f : 0f);
             float strafeSign = (tickIndex / _strafeSwitchTicks) % 2 == 0 ? 1f : -1f;
-            Vector3 strafe = Vector3.Cross(Vector3.up, aim) * (strafeSign * _ai.StrafeStrength);
-            Vector3 move = SimMovement.ClampMoveInput(aim * radial + strafe);
+            Vector3 strafe = Vector3.Cross(Vector3.up, flatDir) * (strafeSign * _ai.StrafeStrength);
+            Vector3 move = SimMovement.ClampMoveInput(flatDir * radial + strafe);
 
-            bool fire = distance <= _ai.FireRange
+            bool fire = distance3D <= _ai.FireRange
                         && Vector3.Angle(_self.AimDirection, aim) <= _ai.FireConeDegrees
-                        && IsReady(SimBlastAbility.Id);
+                        && IsReady(_self.Loadout.WeaponId);
 
-            bool dash = tickIndex > 0
-                        && tickIndex % _dashIntervalTicks == 0
-                        && distance > _ai.EngageDistance * 1.5f
-                        && IsReady(SimDashAbility.Id);
+            bool useAbility1 = tickIndex > 0
+                               && tickIndex % _dashIntervalTicks == 0
+                               && flatDistance > _ai.EngageDistance * 1.5f
+                               && IsReady(_self.Loadout.Ability1Id);
 
-            return new SimInputFrame(move, aim, fire, dash);
+            return new SimInputFrame(move, aim, fire, useAbility1);
         }
 
-        private bool IsReady(string abilityId) => _self.TryGetAbility(abilityId, out SimAbility ability) && ability.IsReady;
-    }
+        private bool IsReady(string abilityId) =>
+            !string.IsNullOrEmpty(abilityId) && _self.TryGetAbility(abilityId, out SimAbility ability) && ability.IsReady;
+    } 
 }

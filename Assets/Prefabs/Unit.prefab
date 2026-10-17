@@ -155,6 +155,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LittleDelay.Presentation.PlayerSimInputSource
   _look: {fileID: 4012571768932975381}
+  _aimCamera: {fileID: 0}
+  _crosshairUI: {fileID: 0}
+  _aimConvergenceDistance: 30
 --- !u!1 &6685058777432189011
 GameObject:
   m_ObjectHideFlags: 0

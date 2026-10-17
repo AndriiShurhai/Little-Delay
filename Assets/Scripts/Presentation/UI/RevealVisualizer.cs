@@ -19,6 +19,8 @@ namespace LittleDelay.Presentation
         [SerializeField] private float _fadeDuration = 1f;
         [SerializeField] private Color _lineColor = new Color(0f, 0.8f, 1f);
         [SerializeField] private float _lineWidth = 2f;
+        [Tooltip("Assign a material that uses an unlit/sprite shader. Shader.Find can return null in a build because the shader is stripped when nothing references it; the code only falls back to it when this is empty.")]
+        [SerializeField] private Material _lineMaterialAsset;
 
         private static Material _lineMaterial;
 
@@ -93,9 +95,21 @@ namespace LittleDelay.Presentation
             _line.SetPosition(_line.positionCount - 1, target);
         }
 
+        private static Material CreateFallbackMaterial()
+        {
+            Shader shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+            {
+                Debug.LogError("[RevealVisualizer] Shader 'Sprites/Default' was not found (stripped from the build?). Assign a material to 'Line Material Asset' on RevealVisualizer.");
+                shader = Shader.Find("Hidden/InternalErrorShader");
+            }
+
+            return new Material(shader);
+        }
+
         private LineRenderer CreateLine(string objectName)
         {
-            if (_lineMaterial == null) _lineMaterial = new Material(Shader.Find("Sprites/Default"));
+            if (_lineMaterial == null) _lineMaterial = _lineMaterialAsset != null ? _lineMaterialAsset : CreateFallbackMaterial();
 
             var go = new GameObject(objectName);
             go.transform.SetParent(transform);

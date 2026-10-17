@@ -21,7 +21,7 @@ namespace LittleDelay.Presentation
         [SerializeField] private Transform _poolRoot;
         [SerializeField] private int _prewarmCount = 16;
         [Tooltip("Lifts the visual (e.g. to chest height) without touching simulation positions.")]
-        [SerializeField] private float _heightOffset = 1f;
+        [SerializeField] private float _heightOffset = 0f;
 
         private readonly Dictionary<int, Entry> _active = new();
         private readonly List<int> _scratch = new();

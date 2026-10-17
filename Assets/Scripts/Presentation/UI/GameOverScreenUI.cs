@@ -11,63 +11,72 @@ namespace LittleDelay.Presentation
     /// match flow or a scene loader directly - the composition root owns what those commands do.
     /// Public Quit() is kept so an inspector-wired Button.onClick still works; Rematch() is new.
     /// </summary>
-    public class GameOverScreenUI : MonoBehaviour
+
+    namespace LittleDelay.Presentation
     {
-        [SerializeField] private GameObject _gameOverScreen;
-        [SerializeField] private TMPro.TextMeshProUGUI _winnerText;
-        [Tooltip("Optional. If set, the cursor is released while the screen is up and re-locked afterwards.")]
-        [SerializeField] private CursorManager _cursorManager;
-        [Tooltip("Optional. Hooked up automatically; leave empty if you wire Button.onClick in the inspector.")]
-        [SerializeField] private Button _rematchButton;
-        [SerializeField] private Button _quitButton;
-
-        private IEventBus _bus;
-        private readonly System.Collections.Generic.List<System.IDisposable> _subs = new();
-
-        public void Initialize(IEventBus bus)
+        public class GameOverScreenUI : MonoBehaviour
         {
-            _bus = bus;
-            _subs.Add(bus.Subscribe<MatchEndedEvent>(e => ShowGameOverScreen(e.Outcome)));
-            _subs.Add(bus.Subscribe<ShowdownPreviewStartedEvent>(_ => HideGameOverScreen()));
+            [SerializeField] private GameObject _gameOverScreen;
+            [SerializeField] private TMPro.TextMeshProUGUI _winnerText;
+            [Tooltip("Optional. If set, the cursor is released while the screen is up and re-locked afterwards.")]
+            [SerializeField] private CursorManager _cursorManager;
+            [Tooltip("Optional. Hooked up automatically; leave empty if you wire Button.onClick in the inspector.")]
+            [SerializeField] private Button _rematchButton;
+            [SerializeField] private Button _quitButton;
 
-            if (_rematchButton != null) _rematchButton.onClick.AddListener(Rematch);
-            if (_quitButton != null) _quitButton.onClick.AddListener(Quit);
+            [Header("Result Strings")]
+            [SerializeField] private string _playerWinText = "YOU WIN!";
+            [SerializeField] private string _opponentWinText = "OPPONENT WINS!";
+            [SerializeField] private string _drawText = "DRAW!";
 
-            HideGameOverScreen();
-        }
+            private IEventBus _bus;
+            private readonly System.Collections.Generic.List<System.IDisposable> _subs = new();
 
-        private void OnDestroy()
-        {
-            foreach (System.IDisposable sub in _subs) sub.Dispose();
-            _subs.Clear();
-            if (_rematchButton != null) _rematchButton.onClick.RemoveListener(Rematch);
-            if (_quitButton != null) _quitButton.onClick.RemoveListener(Quit);
-        }
-
-        public void HideGameOverScreen()
-        {
-            _gameOverScreen.SetActive(false);
-            if (_cursorManager != null) _cursorManager.LockCursor();
-        }
-
-        public void ShowGameOverScreen(RoundOutcome outcome)
-        {
-            if (_winnerText != null)
+            public void Initialize(IEventBus bus)
             {
-                _winnerText.text = outcome switch
-                {
-                    RoundOutcome.PlayerWin => "FIGHTER 1 WINS!",
-                    RoundOutcome.OpponentWin => "FIGHTER 2 WINS!",
-                    _ => "DRAW!"
-                };
+                _bus = bus;
+                _subs.Add(bus.Subscribe<MatchEndedEvent>(e => ShowGameOverScreen(e.Outcome)));
+                _subs.Add(bus.Subscribe<ShowdownPreviewStartedEvent>(_ => HideGameOverScreen()));
+
+                if (_rematchButton != null) _rematchButton.onClick.AddListener(Rematch);
+                if (_quitButton != null) _quitButton.onClick.AddListener(Quit);
+
+                HideGameOverScreen();
             }
 
-            _gameOverScreen.SetActive(true);
-            if (_cursorManager != null) _cursorManager.UnlockCursor();
+            private void OnDestroy()
+            {
+                foreach (System.IDisposable sub in _subs) sub.Dispose();
+                _subs.Clear();
+                if (_rematchButton != null) _rematchButton.onClick.RemoveListener(Rematch);
+                if (_quitButton != null) _quitButton.onClick.RemoveListener(Quit);
+            }
+
+            public void HideGameOverScreen()
+            {
+                _gameOverScreen.SetActive(false);
+                if (_cursorManager != null) _cursorManager.LockCursor();
+            }
+
+            public void ShowGameOverScreen(RoundOutcome outcome)
+            {
+                if (_winnerText != null)
+                {
+                    _winnerText.text = outcome switch
+                    {
+                        RoundOutcome.PlayerWin => _playerWinText,
+                        RoundOutcome.OpponentWin => _opponentWinText,
+                        _ => _drawText
+                    };
+                }
+
+                _gameOverScreen.SetActive(true);
+                if (_cursorManager != null) _cursorManager.UnlockCursor();
+            }
+
+            public void Rematch() => _bus?.Publish(new RematchRequestedEvent());
+
+            public void Quit() => _bus?.Publish(new QuitToMenuRequestedEvent());
         }
-
-        public void Rematch() => _bus?.Publish(new RematchRequestedEvent());
-
-        public void Quit() => _bus?.Publish(new QuitToMenuRequestedEvent());
     }
 }

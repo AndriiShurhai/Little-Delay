@@ -31,6 +31,7 @@ namespace LittleDelay.Simulation.Flow
         private SimSpawn _opponentSpawn;
         private float _playerHealth = -1f;
         private float _opponentHealth = -1f;
+        private float _arenaStartRadius = -1f; // -1 = first round, use the config formula
         private SimInputRecording _playerRecording = SimInputRecording.Empty;
         private SimInputRecording _opponentRecording = SimInputRecording.Empty;
 
@@ -66,6 +67,7 @@ namespace LittleDelay.Simulation.Flow
             _opponentSpawn = _initialOpponentSpawn;
             _playerHealth = -1f;
             _opponentHealth = -1f;
+            _arenaStartRadius = -1f;
             _playerRecording = SimInputRecording.Empty;
             _opponentRecording = SimInputRecording.Empty;
 
@@ -81,7 +83,7 @@ namespace LittleDelay.Simulation.Flow
             RoundNumber++;
 
             var world = new SimWorld(_config, _eventBus, SimWorldMode.Recording, RoundNumber, _arenaCenter,
-                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth);
+                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth, _arenaStartRadius);
 
             var reveal = new SimRevealSystem(_config, _eventBus, world.Player, world.Opponent);
 
@@ -114,7 +116,7 @@ namespace LittleDelay.Simulation.Flow
             RetireCurrentWorld();
 
             var world = new SimWorld(_config, _eventBus, SimWorldMode.Battle, RoundNumber, _arenaCenter,
-                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth);
+                _playerSpawn, _opponentSpawn, _playerHealth, _opponentHealth, _arenaStartRadius);
 
             CurrentRunner = SimRoundRunner.ForBattle(world, _config, _playerRecording, _opponentRecording);
             _eventBus.Publish(new SimWorldCreatedEvent(world, SimWorldMode.Battle));
@@ -140,7 +142,7 @@ namespace LittleDelay.Simulation.Flow
             }
             else if (RoundNumber >= _config.MaxRounds)
             {
-                EndMatch(RoundOutcome.Draw);
+                EndMatch(ResolveNoKillAfterFinalRound(world));
             }
             else
             {
@@ -148,6 +150,18 @@ namespace LittleDelay.Simulation.Flow
             }
 
             return outcome;
+        }
+
+        /// <summary>No kill after the last round: a Draw, or (HealthTiebreakAfterFinalRound) whoever has more health left.</summary>
+        private RoundOutcome ResolveNoKillAfterFinalRound(SimWorld world)
+        {
+            if (!_config.HealthTiebreakAfterFinalRound) return RoundOutcome.Draw;
+
+            float player = world.Player.CurrentHealth;
+            float opponent = world.Opponent.CurrentHealth;
+            if (Mathf.Approximately(player, opponent)) return RoundOutcome.Draw;
+
+            return player > opponent ? RoundOutcome.PlayerWin : RoundOutcome.OpponentWin;
         }
 
         private void EndMatch(RoundOutcome outcome)
@@ -159,7 +173,9 @@ namespace LittleDelay.Simulation.Flow
 
         private void CarryIntoNextRound(SimWorld finished)
         {
-            float nextRadius = SimMovement.ComputeRoundStartRadius(_config, RoundNumber + 1);
+            // Cumulative shrink: the next round starts below where this battle ended, so the arena never regrows.
+            float nextRadius = SimMovement.ComputeNextRoundStartRadius(_config, finished.ArenaRadius);
+            _arenaStartRadius = nextRadius;
 
             _playerSpawn = NextSpawn(finished.Player, nextRadius);
             _opponentSpawn = NextSpawn(finished.Opponent, nextRadius);

@@ -1,15 +1,16 @@
-using System;
-using System.Collections.Generic;
 using Drewio.UnityToolkit.Audio;
 using Drewio.UnityToolkit.Core;
 using Drewio.UnityToolkit.Scenes;
 using Drewio.UnityToolkit.Timers;
 using LittleDelay.Presentation;
+using LittleDelay.Presentation.LittleDelay.Presentation;
 using LittleDelay.Simulation.AI;
 using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
 using LittleDelay.Simulation.Flow;
 using LittleDelay.Simulation.Reveal;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace LittleDelay.Composition
@@ -45,9 +46,11 @@ namespace LittleDelay.Composition
         [SerializeField] private ArenaView _arenaView;
         [SerializeField] private RevealVisualizer _revealVisualizer;
         [SerializeField] private SpawnIndicator _spawnIndicator;
+        [SerializeField] private ShowdownScreenUI _showdownScreen;
 
         [Header("UI")]
         [SerializeField] private BattleUIManager _battleHud;
+        [SerializeField] private RevealCountdownUI _revealCountdown;
         [SerializeField] private GameOverScreenUI _gameOverScreen;
         [SerializeField] private FighterHealthBarUI[] _healthBars;
         [SerializeField] private AbilitySlotUI[] _abilitySlots;
@@ -86,7 +89,6 @@ namespace LittleDelay.Composition
             _audio = services.Resolve<AudioPlaybackService>();
         }
 
-        // Start (not Awake) so GameInput and every other scene object's Awake has already run.
         private void Start()
         {
             Clock = new SimTickClock(_matchConfig.FixedDeltaTime);
@@ -110,8 +112,8 @@ namespace LittleDelay.Composition
 
         private void WireViews()
         {
-            _playerInput.Initialize(EventBus, GameInput.Instance);
-            _cameraTarget.Initialize(EventBus);
+            _playerInput.Initialize(EventBus, GameInput.Instance, _matchConfig);
+            _cameraTarget.Initialize(EventBus, GameInput.Instance);
 
             _playerView.Initialize(EventBus, Clock);
             _opponentView.Initialize(EventBus, Clock);
@@ -119,8 +121,10 @@ namespace LittleDelay.Composition
             _arenaView.Initialize(EventBus);
             _revealVisualizer.Initialize(EventBus);
             _spawnIndicator.Initialize(EventBus);
+            _showdownScreen.Initialize(EventBus, _matchConfig);
 
             _battleHud.Initialize(EventBus, Match);
+            if (_revealCountdown != null) _revealCountdown.Initialize(EventBus, Match, _matchConfig);
             _gameOverScreen.Initialize(EventBus);
             foreach (FighterHealthBarUI bar in _healthBars) bar.Initialize(EventBus);
             foreach (AbilitySlotUI slot in _abilitySlots) slot.Initialize(EventBus);
@@ -128,7 +132,6 @@ namespace LittleDelay.Composition
 
         private void Update()
         {
-            // Starting the flow here (first Update) instead of in Start guarantees every view has finished its own Start.
             if (!_flowStarted)
             {
                 _flowStarted = true;
@@ -145,7 +148,6 @@ namespace LittleDelay.Composition
             _audioBinder?.Dispose();
         }
 
-        /// <summary>Player slot = live device input, opponent slot = the bot (reading only reveal-window intel).</summary>
         private sealed class RecordingInputProvider : ISimRecordingInputProvider
         {
             private readonly PlayerSimInputSource _player;

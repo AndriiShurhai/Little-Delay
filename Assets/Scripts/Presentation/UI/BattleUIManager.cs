@@ -28,6 +28,11 @@ namespace LittleDelay.Presentation
 
         [SerializeField] private float _announcementSeconds = 1.5f;
 
+        [Header("Result Announcements")]
+        [SerializeField] private string _playerWinText = "YOU WIN!";
+        [SerializeField] private string _opponentWinText = "OPPONENT WINS!";
+        [SerializeField] private string _drawText = "DRAW!";
+
         private SimMatch _match;
         private bool _showRecordingTimer;
         private float _clearAnnouncementAt = -1f;
@@ -93,9 +98,9 @@ namespace LittleDelay.Presentation
 
             string text = outcome switch
             {
-                RoundOutcome.PlayerWin => "FIGHTER 1 WINS!",
-                RoundOutcome.OpponentWin => "FIGHTER 2 WINS!",
-                _ => "DRAW!"
+                RoundOutcome.PlayerWin => _playerWinText,
+                RoundOutcome.OpponentWin => _opponentWinText,
+                _ => _drawText
             };
 
             Announce(text, false);

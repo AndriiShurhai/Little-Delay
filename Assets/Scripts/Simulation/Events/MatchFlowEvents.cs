@@ -113,7 +113,7 @@ namespace LittleDelay.Simulation.Events
         }
     }
 
-    /// <summary>Whoever kills the opponent in any round wins the match outright; Draw covers simultaneous death and "no kill after the last round".</summary>
+    /// <summary>Whoever kills the opponent in any round wins the match outright; Draw covers simultaneous death and "no kill after the last round" (unless HealthTiebreakAfterFinalRound decides it on health).</summary>
     public readonly struct MatchEndedEvent : IGameEvent
     {
         public readonly RoundOutcome Outcome;

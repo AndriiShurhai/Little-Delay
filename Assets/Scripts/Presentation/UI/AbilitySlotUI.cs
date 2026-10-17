@@ -8,7 +8,12 @@ using UnityEngine.UI;
 
 namespace LittleDelay.Presentation
 {
-    public enum AbilitySlot { Mobility, Attack }
+    public enum AbilitySlot
+    {
+        Mobility = 0, // Ability 1
+        Attack = 1,   // Primary Weapon
+        Ability2 = 2  // Ability 2
+    }
 
     /// <summary>
     /// One ability icon with a cooldown fill. Pull model: it samples SimAbility.NormalizedRemaining every frame
@@ -19,7 +24,7 @@ namespace LittleDelay.Presentation
     {
         [SerializeField] private AbilitySlot _slot;
         [SerializeField] private Image _icon;
-        [SerializeField] private Image _cooldownOverlay; // Image.Type.Filled
+        [SerializeField] private Image _cooldownOverlay;
         [SerializeField] private TMP_Text _keybindText;
 
         [Header("Display (the simulation ability holds no art)")]
@@ -37,7 +42,15 @@ namespace LittleDelay.Presentation
 
             _worldSub = bus.Subscribe<SimWorldCreatedEvent>(e =>
             {
-                string id = _slot == AbilitySlot.Mobility ? SimDashAbility.Id : SimBlastAbility.Id;
+                var loadout = e.World.Player.Loadout;
+                string id = _slot switch
+                {
+                    AbilitySlot.Attack => loadout.WeaponId,
+                    AbilitySlot.Mobility => loadout.Ability1Id,
+                    AbilitySlot.Ability2 => loadout.Ability2Id,
+                    _ => string.Empty
+                };
+
                 e.World.Player.TryGetAbility(id, out _bound);
             });
         }

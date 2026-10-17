@@ -83,11 +83,26 @@ namespace LittleDelay.Simulation.Fighters
             return Mathf.Max(config.ArenaMinRadius, radius);
         }
 
-        /// <summary>Radius during a battle: round-start radius minus continuous shrink over elapsed battle time.</summary>
+        /// <summary>Radius during a battle of a round that began at the nominal (first-round formula) radius.</summary>
         public static float ComputeBattleRadius(SimMatchConfig config, int roundNumber, float battleElapsedSeconds)
         {
-            float radius = ComputeRoundStartRadius(config, roundNumber) - config.ArenaShrinkRatePerSecond * battleElapsedSeconds;
+            return ComputeShrunkRadius(config, ComputeRoundStartRadius(config, roundNumber), battleElapsedSeconds);
+        }
+
+        /// <summary>Radius during a battle: the radius the round started at minus continuous shrink over elapsed battle time.</summary>
+        public static float ComputeShrunkRadius(SimMatchConfig config, float startRadius, float battleElapsedSeconds)
+        {
+            float radius = startRadius - config.ArenaShrinkRatePerSecond * battleElapsedSeconds;
             return Mathf.Max(config.ArenaMinRadius, radius);
+        }
+
+        /// <summary>
+        /// Cumulative shrink: a round starts ArenaShrinkPerRound below where the previous battle ended, so the arena
+        /// never regrows between rounds and eventually reaches ArenaMinRadius.
+        /// </summary>
+        public static float ComputeNextRoundStartRadius(SimMatchConfig config, float previousRoundEndRadius)
+        {
+            return Mathf.Max(config.ArenaMinRadius, previousRoundEndRadius - config.ArenaShrinkPerRound);
         }
 
         /// <summary>Reduces a vector's length by amount (never past zero) without changing its direction.</summary>

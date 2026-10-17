@@ -32,12 +32,21 @@ namespace LittleDelay.Simulation.Reveal
     }
 
     /// <summary>
+    /// Pluggable reveal feed. Offline and on the authoritative server, SimRevealSystem reads both fighters;
+    /// on a network client in M3, a NetworkRevealSource can publish the same events from server messages.
+    /// </summary>
+    public interface IRevealSource : ISimIntelSource
+    {
+        void Tick(int completedTicks);
+    }
+
+    /// <summary>
     /// Runs the reveal schedule (GDD v0.1: 3 windows per recording, one every 7s starting at tick 0, each 2s).
     /// While a window is open each fighter is "seen": trail-point events drive the HUD and the same observation
     /// is stored as intel for the AI - so the bot learns exactly what a human would see, and outside a window
     /// only has stale intel to extrapolate from. Recording-mode only.
     /// </summary>
-    public sealed class SimRevealSystem : ISimIntelSource
+    public sealed class SimRevealSystem : IRevealSource
     {
         private readonly IEventBus _eventBus;
         private readonly SimFighter _player;

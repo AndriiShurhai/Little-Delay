@@ -21,6 +21,8 @@ namespace LittleDelay.Simulation.Core
         public float RecordingDurationSeconds = 20f;
         [Tooltip("Health left at the end of a round that ends with no kill carries into the next round.")]
         public bool CarryHealthBetweenRounds = true;
+        [Tooltip("If nobody dies in any round, the fighter with more health wins instead of the match being a Draw. Equal health is still a Draw.")]
+        public bool HealthTiebreakAfterFinalRound = true;
 
         [Header("Phase Timing (seconds)")]
         public float ShowdownPreviewSeconds = 3f;
@@ -33,6 +35,7 @@ namespace LittleDelay.Simulation.Core
         public float MaxHealth = 100f;
         public float FighterMoveSpeed = 6f;
         public float FighterHurtboxRadius = 0.5f;
+        public float FighterAimHeight = 1f;
 
         [Header("Jump")]
         [Tooltip("Initial upward speed (m/s). 0 disables jumping. Peak height is roughly speed^2 / (2 * gravity).")]
@@ -58,10 +61,10 @@ namespace LittleDelay.Simulation.Core
         [Header("Arena")]
         public float ArenaInitialRadius = 15f;
         public float ArenaMinRadius = 4f;
-        [Tooltip("Radius lost at the start of each round after the first (replaces the old between-rounds wall move).")]
+        [Tooltip("Cumulative: each round after the first starts this much below the radius the previous battle ended at.")]
         public float ArenaShrinkPerRound = 2f;
         [Tooltip("Extra shrink while a battle is running. Set both shrink values to taste.")]
-        public float ArenaShrinkRatePerSecond = 0.15f;
+        public float ArenaShrinkRatePerSecond = 0f;
 
         [Header("Deflection / Knockback")]
         public float DeflectionKnockbackSpeed = 3f;
@@ -69,7 +72,8 @@ namespace LittleDelay.Simulation.Core
 
         [Header("Passivity")]
         public float PassivityCheckIntervalSeconds = 4f;
-        public float PassivityMinTravelDistance = 1.5f;
+        [Tooltip("Minimum size (m) of the XZ box the fighter's real positions must span within one check interval. Pushing into a wall or pacing in place does not count.")]
+        public float PassivityMinTravelDistance = 4f;
         public float PassivityDamage = 5f;
 
         [Header("Reveals")]

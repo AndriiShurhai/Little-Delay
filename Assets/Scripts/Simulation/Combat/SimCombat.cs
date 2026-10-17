@@ -116,20 +116,19 @@ namespace LittleDelay.Simulation.Combat
                 SimFighter target = projectile.Owner == FighterSlot.Player ? opponent : player;
                 if (!target.IsAlive) continue;
 
-                Vector3 relativeStart = projectile.PreviousPosition - target.Position;
-                Vector3 relativeEnd = projectile.Position - target.Position;
+                Vector3 targetCenter = target.Position + Vector3.up * _config.FighterAimHeight;
+                Vector3 relativeStart = projectile.PreviousPosition - targetCenter;
+                Vector3 relativeEnd = projectile.Position - targetCenter;
                 ClosestApproachFraction(relativeStart, relativeEnd, out float closestDistanceSq);
                 if (closestDistanceSq > hitDistanceSq) continue;
 
                 ApplyDamage(target, _config.ProjectileDamage, DamageSource.Projectile);
 
-                // Knockback along the projectile's travel direction, additive on top of whatever input the
-                // target's recording is playing - once it ends the recording simply continues from the pushed position.
                 Vector3 travel = projectile.Velocity;
                 travel.y = 0f;
                 Vector3 knockbackDirection = travel.sqrMagnitude > 0.0001f
                     ? travel.normalized
-                    : (target.Position - projectile.Position).normalized;
+                    : (targetCenter - projectile.Position).normalized;
                 target.ApplyDeflection(knockbackDirection * _config.DeflectionKnockbackSpeed, _config.DeflectionDurationSeconds);
 
                 projectile.IsExpired = true;

@@ -1,5 +1,6 @@
 ﻿#if UNITY_EDITOR
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class TimeController : MonoBehaviour
 {
@@ -14,7 +15,8 @@ public class TimeController : MonoBehaviour
 
     private void Update()
     {
-        if (!Input.GetKeyDown(KeyCode.T)) return;
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null || !keyboard.tKey.wasPressedThisFrame) return;
 
         bool goingSlowMo = Time.timeScale >= 1f;
 

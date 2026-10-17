@@ -1,6 +1,7 @@
 using Drewio.UnityToolkit.Core;
 using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
+using TMPro;
 using UnityEngine;
 
 namespace LittleDelay.Presentation
@@ -20,18 +21,24 @@ namespace LittleDelay.Presentation
 
         private float pitch; // Up/Down (X axis)
         private float yaw;   // Left/Right (Y axis)
+        private GameInput _input;
         private System.IDisposable _worldSub;
 
         public float Yaw => yaw;
+        public float Pitch => pitch;
 
-        public void Initialize(IEventBus eventBus)
+        public void Initialize(IEventBus eventBus, GameInput input)
         {
+            _input = input;
             _worldSub = eventBus.Subscribe<SimWorldCreatedEvent>(e =>
             {
                 if (e.Mode != SimWorldMode.Recording) return;
 
                 Vector3 aim = e.World.Player.AimDirection;
-                SetRotation(new Vector3(pitch, Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg, 0f));
+                float flatLen = Mathf.Sqrt(aim.x * aim.x + aim.z * aim.z);
+                float startPitch = Mathf.Clamp(-Mathf.Atan2(aim.y, flatLen) * Mathf.Rad2Deg, topClamp, bottomClamp);
+                float startYaw = Mathf.Atan2(aim.x, aim.z) * Mathf.Rad2Deg;
+                SetRotation(new Vector3(startPitch, startYaw, 0f));
             });
         }
 
@@ -39,10 +46,10 @@ namespace LittleDelay.Presentation
 
         public void SetRotation(Vector3 angles)
         {
+            pitch = Mathf.Clamp(angles.x, topClamp, bottomClamp);
             yaw = angles.y;
-            pitch = angles.x;
 
-            transform.rotation = Quaternion.Euler(angles);
+            transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
         }
 
         public Vector3 GetCurrentRotation()
@@ -52,9 +59,9 @@ namespace LittleDelay.Presentation
 
         private void Update()
         {
-            if (GameInput.Instance == null) return;
+            if (_input == null) return;
 
-            Vector2 lookInput = GameInput.Instance.GetLookVector();
+            Vector2 lookInput = _input.GetLookVector();
 
             yaw += lookInput.x * lookSensitivity;
             pitch -= lookInput.y * lookSensitivity;

@@ -17,7 +17,7 @@ namespace LittleDelay.Simulation.Flow
         private readonly ISimInputSource _opponent;
         private readonly SimInputRecorder _playerRecorder;
         private readonly SimInputRecorder _opponentRecorder;
-        private readonly SimRevealSystem _reveal;
+        private readonly IRevealSource _reveal;
         private readonly int _phaseTicks;
         private readonly int _settleTicks;
         private int _settleStartTick = -1;

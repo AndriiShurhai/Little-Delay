@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using LittleDelay.Simulation.Abilities;
+using LittleDelay.Simulation.Core;
 using LittleDelay.Simulation.Events;
 using UnityEngine;
 
@@ -17,6 +18,7 @@ namespace LittleDelay.Simulation.Fighters
         private readonly Dictionary<string, SimAbility> _abilitiesById = new();
 
         public FighterSlot Slot { get; }
+        public SimLoadout Loadout { get; }
         public float MaxHealth { get; }
 
         public Vector3 Position { get; private set; }
@@ -52,28 +54,38 @@ namespace LittleDelay.Simulation.Fighters
 
         public IReadOnlyList<SimAbility> Abilities => _abilityList;
 
-        internal SimPassivityTracker PassivityTracker { get; } = new();
+        internal SimPassivityTracker PassivityTracker { get; }
 
         // Edge detection so a held button only reports "ability failed" once, not 50 times a second.
         internal bool FireWasRequested { get; set; }
-        internal bool MobilityWasRequested { get; set; }
+        internal bool Ability1WasRequested { get; set; }
+        internal bool Ability2WasRequested { get; set; }
 
-        public SimFighter(FighterSlot slot, Vector3 spawnPosition, Vector3 spawnAim, float maxHealth, float startHealth = -1f)
+        public SimFighter(
+            FighterSlot slot,
+            Vector3 spawnPosition,
+            Vector3 spawnAim,
+            float maxHealth,
+            float startHealth = -1f,
+            SimLoadout? loadout = null)
         {
             Slot = slot;
+            Loadout = loadout ?? SimLoadout.Default;
             Position = spawnPosition;
             PreviousPosition = spawnPosition;
             GroundHeight = spawnPosition.y;
+            PassivityTracker = new SimPassivityTracker(spawnPosition);
             MaxHealth = maxHealth;
             CurrentHealth = startHealth > 0f ? Mathf.Min(startHealth, maxHealth) : maxHealth;
 
-            spawnAim.y = 0f;
             AimDirection = spawnAim.sqrMagnitude > 0.0001f ? spawnAim.normalized : Vector3.forward;
             PreviousAimDirection = AimDirection;
         }
 
         public void AddAbility(SimAbility ability)
         {
+            if (ability == null) return;
+
             if (_abilitiesById.ContainsKey(ability.AbilityId))
             {
                 _abilityList.Remove(_abilitiesById[ability.AbilityId]);
@@ -83,8 +95,16 @@ namespace LittleDelay.Simulation.Fighters
             _abilityList.Add(ability);
         }
 
-        public bool TryGetAbility(string abilityId, out SimAbility ability) => _abilitiesById.TryGetValue(abilityId, out ability);
+        public bool TryGetAbility(string abilityId, out SimAbility ability)
+        {
+            if (string.IsNullOrEmpty(abilityId))
+            {
+                ability = null;
+                return false;
+            }
 
+            return _abilitiesById.TryGetValue(abilityId, out ability);
+        }
         /// <summary>Called first thing each tick so Previous* always holds the last tick's end state.</summary>
         internal void BeginTick()
         {
@@ -92,12 +112,12 @@ namespace LittleDelay.Simulation.Fighters
             PreviousAimDirection = AimDirection;
         }
 
-        /// <summary>This tick's clamped move input and aim. AimDirection only changes when the input supplied one (flattened to XZ).</summary>
+        /// <summary>This tick's clamped move input and 3D aim. AimDirection only changes when the input supplied one (flattened to XZ).</summary>
         internal void SetInput(Vector3 moveInput, Vector3 aimDirection)
         {
             MoveInput = moveInput;
 
-            aimDirection.y = 0f;
+            //aimDirection.y = 0f;
             if (aimDirection.sqrMagnitude > 0.0001f)
             {
                 AimDirection = aimDirection.normalized;
